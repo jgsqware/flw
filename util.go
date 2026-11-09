@@ -106,6 +106,9 @@ func fit(s string, w int) string {
 
 // box draws a k9s-like frame with a title in the top border.
 func box(title, body string, w, h int, color lipgloss.Color) string {
+	if desktopUI {
+		return chromeBox(title, body, w, h, chromeFocused)
+	}
 	bc := lipgloss.NewStyle().Foreground(color)
 	inner := w - 2
 	if inner < 1 || h < 2 {

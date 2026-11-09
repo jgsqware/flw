@@ -21,7 +21,8 @@ type Config struct {
 	Ping      string       `yaml:"ping"`   // e.g. 24h
 	Reping    string       `yaml:"reping"` // e.g. 72h
 	CodeRoots []string     `yaml:"code_roots"`
-	SnoozeAt  string       `yaml:"snooze_at"` // when "z demain" wakes up, default 09:00 // folders holding your clones
+	SnoozeAt  string       `yaml:"snooze_at"`
+	UI        string       `yaml:"ui"` // desktop (default) or classic // when "z demain" wakes up, default 09:00 // folders holding your clones
 	Notify    NotifyConfig `yaml:"notify"`
 }
 
@@ -62,6 +63,9 @@ reviewers:
 #   activity: true
 #   every: 1m
 #   events: [comment, pipeline, approval, turn, ping, conflict, merged]
+
+# layout: desktop (dock, tiled windows, palette) or classic (one view at a time)
+# ui: desktop
 
 # when a snoozed MR ("z demain", "z lundi"…) comes back
 # snooze_at: "09:00"

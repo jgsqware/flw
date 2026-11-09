@@ -39,6 +39,7 @@ const (
 	mConfirm
 	mText
 	mHelp
+	mPalette
 )
 
 type (
@@ -80,6 +81,8 @@ type App struct {
 
 	spin spinner.Model
 	busy int
+
+	desk deskState
 }
 
 func newApp(gl *Client, project string) *App {
@@ -231,7 +234,15 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if a.project != "" {
 			first = a.reset(newProjectMRsView(a, a.project))
 		}
-		return a, tea.Batch(first, a.poll())
+		a.desk.cur = a.project
+		return a, tea.Batch(first, a.poll(), a.scanRexCmd())
+
+	case previewMsg:
+		return a, a.loadPreview(msg.key)
+
+	case rexTabsMsg:
+		a.desk.scanning, a.desk.rexAt, a.desk.rexTabs = false, time.Now(), msg.tabs
+		return a, nil
 
 	case notifyMsg:
 		a.polling = false
@@ -241,7 +252,7 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return a, a.onNotify(msg.mrs, msg.done)
 
 	case loadedMsg:
-		return a, msg.v.Loaded(a, msg)
+		return a, tea.Batch(msg.v.Loaded(a, msg), a.syncPreview())
 
 	case actionDoneMsg:
 		if a.busy > 0 {
@@ -283,7 +294,19 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if a.booted && a.gl.Me != "" && time.Since(a.notif.last) >= notifyEvery() {
 			pc = a.poll()
 		}
-		return a, tea.Batch(cmd, pc, tick())
+		var dc []tea.Cmd
+		if a.tiled() && a.mode != mText {
+			if p := a.desk.preview; p != nil && p.Due(time.Time(msg)) {
+				dc = append(dc, p.Refresh(a))
+			}
+			if l := a.desk.pipe; l != nil && l.Due(time.Time(msg)) {
+				dc = append(dc, l.Refresh(a))
+			}
+		}
+		if a.booted {
+			dc = append(dc, a.scanRexCmd())
+		}
+		return a, tea.Batch(cmd, pc, tick(), tea.Batch(dc...))
 
 	case spinner.TickMsg:
 		var cmd tea.Cmd
@@ -291,12 +314,13 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return a, cmd
 
 	case tea.KeyMsg:
-		return a, a.handleKey(msg)
+		cmd := a.handleKey(msg)
+		return a, tea.Batch(cmd, a.syncPreview())
 	}
 
 	// forward other messages (e.g. textinput blink) to inputs
 	switch a.mode {
-	case mCommand, mFilter, mPrompt:
+	case mCommand, mFilter, mPrompt, mPalette:
 		var cmd tea.Cmd
 		a.input, cmd = a.input.Update(msg)
 		return a, cmd
@@ -325,6 +349,9 @@ func (a *App) handleKey(k tea.KeyMsg) tea.Cmd {
 	case mHelp:
 		a.mode = mNormal
 		return nil
+
+	case mPalette:
+		return a.paletteKey(k)
 
 	case mConfirm:
 		switch k.String() {
@@ -399,6 +426,11 @@ func (a *App) handleKey(k tea.KeyMsg) tea.Cmd {
 	}
 
 	// normal mode
+	if desktopUI {
+		if ok, cmd := a.deskKey(k); ok {
+			return cmd
+		}
+	}
 	t := a.top()
 	switch k.String() {
 	case "q":
@@ -513,6 +545,9 @@ func (a *App) View() string {
 	if a.w == 0 {
 		return ""
 	}
+	if desktopUI {
+		return a.viewDesktop()
+	}
 	header := a.renderHeader()
 	footer := a.renderFooter()
 	bodyH := a.h - lipgloss.Height(header) - lipgloss.Height(footer)
@@ -603,7 +638,12 @@ func (a *App) renderFooter() string {
 	}
 	hints = append(hints, hint(":", "cmd"), hint("/", "filter"), hint("esc", "back"), hint("?", "help"))
 	line1 := fit(strings.Join(hints, "  "), a.w)
+	_, line2 := a.footerLines()
+	return line1 + "\n" + fit(line2, a.w)
+}
 
+// footerLines returns the hint line and the status line (prompt, confirm, flash).
+func (a *App) footerLines() (string, string) {
 	var line2 string
 	switch a.mode {
 	case mCommand:
@@ -631,7 +671,7 @@ func (a *App) renderFooter() string {
 			}
 		}
 	}
-	return line1 + "\n" + fit(line2, a.w)
+	return "", line2
 }
 
 func (a *App) renderTextEditor(h int) string {
@@ -729,4 +769,25 @@ func (a *App) onNotify(mrs, done []*MR) tea.Cmd {
 		return a.flashOK("🔔 " + news[0].title + " " + news[0].body)
 	}
 	return nil
+}
+
+func (a *App) viewDesktop() string {
+	dock := a.renderDock()
+	hints := a.renderDeskFooter()
+	_, status := a.footerLines()
+	bodyH := a.h - 2 - 2
+	if bodyH < 3 {
+		bodyH = 3
+	}
+	var body string
+	switch {
+	case !a.booted:
+		body = chromeBox("flw", "\n  "+a.spin.View()+" connecting to GitLab through glab…", a.w, bodyH, true)
+	case a.bootErr != nil:
+		body = chromeBox("flw", "\n  "+sErr.Render("✘ "+a.bootErr.Error())+"\n\n  Check `glab auth status`.", a.w, bodyH, true)
+	default:
+		body = a.renderDesktop(bodyH)
+	}
+	body = a.renderFloating(body, bodyH)
+	return dock + "\n" + body + "\n" + hints + "\n" + fit(status, a.w)
 }

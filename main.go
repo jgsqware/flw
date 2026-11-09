@@ -33,6 +33,7 @@ func main() {
 	host := flag.String("host", "", "GitLab hostname (default: glab's configured host)")
 	flag.DurationVar(&pingAfter, "ping", pingAfter, "business time an MR may wait on someone before it shows 'ping'")
 	flag.DurationVar(&repingAfter, "reping", repingAfter, "business time before 're-ping' (also: one day after an unanswered ping)")
+	ui := flag.String("ui", "", "layout: desktop (dock, tiled windows, palette) or classic (default from config, else desktop)")
 	showVersion := flag.Bool("version", false, "print version")
 	flag.Usage = func() {
 		fmt.Fprintf(os.Stderr, "flw: a keyboard-driven GitLab TUI on top of glab\n\nUsage: flw [-R group/project] [-host gitlab.example.com]\n       flw daemon [-every 2m]       keep the cache in ~/.cache/flw warm\n       flw service install|uninstall|status|logs   run the daemon as a systemd user service\n       flw config [edit|path]       show or edit ~/.config/flw/config.yaml (default reviewers…)\n\n")
@@ -42,6 +43,12 @@ func main() {
 	if *showVersion {
 		fmt.Println("flw", version)
 		return
+	}
+	switch {
+	case *ui != "":
+		desktopUI = *ui != "classic"
+	case cfg.UI != "":
+		desktopUI = cfg.UI != "classic"
 	}
 	if _, err := lookGlab(); err != nil {
 		fmt.Fprintln(os.Stderr, "flw needs glab in PATH: https://gitlab.com/gitlab-org/cli")

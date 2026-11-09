@@ -25,6 +25,21 @@ flw -host gitlab.example.com
 
 `enter` drills down (MR → details, pipeline → jobs → log, downstream job → child pipeline), `esc` goes back.
 
+## Layout: desktop (default) or classic
+
+The desktop layout follows the [tuios](https://github.com/Gaurav-Gosain/tuios) look: a dock with
+workspaces on top (the dashboard, then one per project of your MRs, with ▶/⏳ badges), windows
+with rounded borders and ● ● ●, an attention sidebar, and floating windows over a dimmed desktop.
+
+- **Tiles**: the MR list is the master window; the selected MR's detail and its pipeline jobs
+  follow the cursor on the right. `tab` moves the focus between windows, keys go to the focused one.
+- **`f`** zooms the focused window (the list, or opens the detail / jobs full size); `esc` comes back.
+- **`alt+1`…`alt+9`** switch workspace; each keeps its own views.
+- **`ctrl+p`** opens the palette: workspaces, every MR of the dashboard, commands.
+- **`space`** shows the keys of the focused window.
+
+`flw -ui classic` (or `ui: classic` in the config) keeps the single-view layout.
+
 ## Whose turn is it? (NEXT column)
 
 Every MR gets a **NEXT** cell saying who must act, what, and for how long (business time, weekends excluded):
