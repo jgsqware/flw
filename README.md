@@ -3,7 +3,7 @@
 A keyboard-driven GitLab TUI (k9s / lazygit style) on top of [`glab`](https://gitlab.com/gitlab-org/cli).
 All data goes through `glab api`, so it reuses your glab login and host.
 
-Needs Go 1.23+ and a logged-in `glab` (`glab auth login`).
+Needs Go 1.27+ and a logged-in `glab` (`glab auth login`).
 
 ```sh
 go install github.com/jgsqware/flw@latest
