@@ -1,0 +1,11 @@
+# flw configuration (demo)
+reviewers:
+  default: [sam, kim]
+  projects:
+    acme/infra: [noor]
+ping: 24h
+reping: 72h
+snooze_at: "09:00"
+notify:
+  every: 15s
+  events: [comment, pipeline, approval, turn, ping, conflict, merged]

@@ -1,0 +1,102 @@
+#!/usr/bin/env python3
+"""A fake glab for the site demo: answers flw's `glab api` calls from fixtures.py. Never
+talks to a network. Write calls (POST/PUT, mutations) succeed and change nothing."""
+import json
+import os
+import re
+import sys
+
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))
+import fixtures as F  # noqa: E402
+
+
+def out(obj):
+    sys.stdout.write(json.dumps(obj))
+    sys.exit(0)
+
+
+def fail(msg, code=1):
+    sys.stderr.write(msg + "\n")
+    sys.exit(code)
+
+
+args = sys.argv[1:]
+if not args or args[0] != "api":
+    fail("fake glab: only `glab api` is supported")
+path = args[1]
+fields, method, i = {}, "GET", 2
+while i < len(args):
+    if args[i] in ("-f", "-F", "--field", "--raw-field") and i + 1 < len(args):
+        k, _, v = args[i + 1].partition("=")
+        fields[k] = v
+        i += 2
+    elif args[i] in ("-X", "--method") and i + 1 < len(args):
+        method = args[i + 1]
+        i += 2
+    else:
+        i += 1
+
+mine = {"author": lambda m: m["author"]["username"] == F.ME,
+        "review": lambda m: any(r["username"] == F.ME for r in m["reviewers"]["nodes"]),
+        "assign": lambda m: any(a["username"] == F.ME for a in m["assignees"]["nodes"])}
+
+
+def light(m):
+    m = dict(m)
+    for k in ("description", "discussions"):
+        m.pop(k, None)
+    return m
+
+
+if path == "graphql":
+    q = fields.get("query", "")
+    if q.lstrip().startswith("mutation"):
+        out({"data": {"mergeRequestSetReviewers": {"errors": []}}})
+    if "currentUser { username webUrl }" in q:
+        out({"data": {"currentUser": {"username": F.ME, "webUrl": F.BASE + "/" + F.ME}}})
+    m = re.search(r"list: (\w+)\(state: (\w+)", q)
+    if m:
+        field, state = m.groups()
+        pick = mine["review" if field.startswith("review") else "author" if field.startswith("authored") else "assign"]
+        nodes = [light(x) for x in F.MRS if pick(x) and state == "opened"]
+        out({"data": {"currentUser": {"list": {"nodes": nodes}}}})
+    if "mergeRequest(iid: $iid) { pipelines" in q:
+        out({"data": {"project": {"mergeRequest": {"pipelines": {"nodes": F.pipelines(fields["p"], fields["iid"])}}}}})
+    if "mergeRequest(iid: $iid)" in q:
+        for x in F.MRS:
+            if x["project"]["fullPath"] == fields.get("p") and x["iid"] == fields.get("iid"):
+                d = dict(x)
+                if not d["discussions"]["nodes"]:
+                    d["discussions"] = {"nodes": [{"resolved": False, "resolvable": False, "notes": {"nodes": [
+                        {"author": t["author"], "body": t["body"], "createdAt": t["createdAt"], "system": t["system"], "position": None}]}}
+                        for t in x["timeline"]["nodes"]]}
+                out({"data": {"project": {"mergeRequest": d}}})
+        out({"data": {"project": {"mergeRequest": None}}})
+    if "mergeRequests(state:" in q:
+        st = re.search(r"mergeRequests\(state: (\w+)", q).group(1)
+        nodes = [light(x) for x in F.MRS if x["project"]["fullPath"] == fields.get("p") and st in ("opened", "all")]
+        out({"data": {"project": {"mergeRequests": {"nodes": nodes}}}})
+    if "pipeline(iid: $iid)" in q:
+        out({"data": {"project": {"pipeline": F.jobs()}}})
+    if "pipelines(first" in q:
+        out({"data": {"project": {"pipelines": {"nodes": F.pipelines(fields["p"], "")}}}})
+    if "projects(membership" in q:
+        out({"data": {"projects": {"nodes": F.PROJECTS}}})
+    if "issues(state" in q:
+        out({"data": {"project": {"issues": {"nodes": []}}}})
+    if "rootRef" in q:
+        out({"data": {"project": {"repository": {"rootRef": "main"}}}})
+    out({"data": None, "errors": [{"message": "fake glab: unknown query"}]})
+
+if method != "GET":
+    out({})
+if path.startswith("projects/:"):
+    fail("404 Not Found (fake glab: not in a GitLab repo)")
+if path.endswith("/trace"):
+    sys.stdout.write(F.TRACE)
+    sys.exit(0)
+if re.search(r"/jobs/\d+$", path):
+    out({"status": "success"})
+if "/diffs" in path:
+    out(F.DIFFS if "page=1" in path else [])
+fail("fake glab: unknown path " + path)

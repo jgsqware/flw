@@ -1,0 +1,940 @@
+<!doctype html>
+<html lang="en" data-lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>flw — whose turn is it?</title>
+<meta name="description" content="A keyboard-driven GitLab TUI on top of glab. For every merge request it tells you who must act, what, and for how long, and when it is time to ping them. MIT, one Go binary.">
+<meta property="og:title" content="flw — whose turn is it on your merge requests?">
+<meta property="og:description" content="A k9s-style terminal UI for GitLab merge requests: a NEXT column that says who must act, ping and re-ping hints in business time, pipelines and logs, Rex tabs with Claude Code sessions.">
+<meta property="og:type" content="website">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%2315232D'/%3E%3Cpath d='M10 9l9 7-9 7z' fill='%23F0A04B'/%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Big+Shoulders+Display:wght@600;800&family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
+<script>
+  // language and theme before the first paint
+  (function () {
+    var d = document.documentElement, lang = null, theme = null;
+    try { lang = localStorage.getItem('flw.lang'); theme = localStorage.getItem('flw.theme'); } catch (e) {}
+    if (!lang) lang = /^fr\b/i.test(navigator.language || '') ? 'fr' : 'en';
+    d.dataset.lang = lang; d.lang = lang;
+    if (theme) d.dataset.theme = theme;
+  })();
+</script>
+<style>
+/* Rack room : une baie de serveurs. Ardoise, sarcelle = technique, ambre = mise en avant. */
+:root {
+  --font-display: "Big Shoulders Display", "Oswald", "Arial Narrow", sans-serif;
+  --font-body: "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
+  /* les rendus terminal ont besoin d'une police qui a tous les traits de cadre */
+  --font-term: ui-monospace, "SFMono-Regular", "SF Mono", Menlo, Consolas, "Cascadia Mono", "DejaVu Sans Mono", "Liberation Mono", "Adwaita Mono", monospace;
+  --bg: #ECEFF1; --surface: #FFFFFF; --ink: #15232D; --muted: #586A76; --line: #C6D0D7;
+  --teal: #0F6E7D; --amber: #B8600C; --ok: #2A7A4B; --warn: #9A6200; --bad: #B23A3A;
+  --code-bg: #15232D; --code-fg: #DDE6EB; --code-dim: #7F95A3; --code-line: #2A3C48; --code-top: #1E2C36;
+  /* couleurs du terminal (toujours sur fond sombre) */
+  --t-teal: #6FC7D6; --t-amber: #F0A04B; --t-ok: #7DD3A8; --t-fail: #E58A8A; --t-violet: #C9A7F5; --t-warn: #E2B24E; --t-dim: #7F95A3; --t-black: #0A1015; --t-white: #F2F6F8;
+  --radius: 8px;
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0E161C; --surface: #15212A; --ink: #E3EAEE; --muted: #8DA0AC; --line: #283944;
+    --teal: #4DB4C4; --amber: #F0A04B; --ok: #5DC28C; --warn: #E2B24E; --bad: #E58A8A;
+    --code-bg: #0A1015; --code-fg: #DDE6EB; --code-line: #1E2C36; --code-top: #15212A;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0E161C; --surface: #15212A; --ink: #E3EAEE; --muted: #8DA0AC; --line: #283944;
+  --teal: #4DB4C4; --amber: #F0A04B; --ok: #5DC28C; --warn: #E2B24E; --bad: #E58A8A;
+  --code-bg: #0A1015; --code-fg: #DDE6EB; --code-line: #1E2C36; --code-top: #15212A;
+  color-scheme: dark;
+}
+:root[data-lang="fr"] [data-l="en"], :root[data-lang="en"] [data-l="fr"] { display: none !important; }
+
+* { box-sizing: border-box; }
+html { scroll-behavior: smooth; scroll-padding-top: 72px; }
+body { margin: 0; background: var(--bg); color: var(--ink); font: 400 15px/1.6 var(--font-body); -webkit-font-smoothing: antialiased; padding-bottom: 64px; overflow-x: hidden; }
+.wrap { max-width: 1320px; margin: 0 auto; padding: 0 32px; }
+@media (max-width: 640px) { .wrap { padding: 0 16px; } body { font-size: 14.5px; } }
+a { color: var(--teal); text-underline-offset: 3px; }
+h1, h2 { font-family: var(--font-display); text-transform: uppercase; line-height: .95; margin: 0; letter-spacing: .01em; text-wrap: balance; }
+h2 { font-weight: 800; font-size: clamp(34px, 5vw, 64px); }
+h2 .dim { display: block; color: var(--muted); font-weight: 600; font-size: .55em; margin-top: .25em; letter-spacing: .02em; }
+h3 { font: 600 17px/1.3 var(--font-body); margin: 0 0 .4em; }
+p { margin: 0; }
+code { font-family: var(--font-mono); font-size: .9em; background: color-mix(in srgb, var(--ink) 7%, transparent); padding: 1px 5px; border-radius: 3px; }
+.eyebrow { font: 500 12px/1.3 var(--font-mono); text-transform: uppercase; letter-spacing: .14em; color: var(--teal); display: flex; gap: 10px; align-items: baseline; flex-wrap: wrap; }
+.eyebrow .num { color: var(--amber); }
+.muted { color: var(--muted); }
+.lead { font-size: clamp(16px, 1.5vw, 19px); line-height: 1.55; max-width: 58ch; }
+.card { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); padding: 20px; min-width: 0; }
+
+/* Boutons */
+.btn { display: inline-flex; align-items: center; gap: 8px; font: 600 13px/1 var(--font-mono); letter-spacing: .06em; text-transform: uppercase; text-decoration: none; padding: 12px 16px; border-radius: 6px; border: 1px solid var(--line); background: var(--surface); color: var(--ink); cursor: pointer; white-space: nowrap; }
+.btn:hover { border-color: var(--muted); }
+.btn.primary { background: var(--amber); border-color: var(--amber); color: var(--t-black); }
+.btn.primary:hover { filter: brightness(1.06); }
+.btns { display: flex; flex-wrap: wrap; gap: 10px; }
+.iconbtn { font: 500 11px/1 var(--font-mono); letter-spacing: .08em; text-transform: uppercase; color: var(--muted); background: none; border: 1px solid var(--line); border-radius: 4px; padding: 7px 9px; cursor: pointer; }
+.iconbtn:hover, .iconbtn[aria-pressed="true"] { color: var(--ink); border-color: var(--muted); }
+
+/* Bandeau et navigation */
+.strip { background: var(--code-bg); color: var(--code-fg); font: 500 11.5px/1 var(--font-mono); letter-spacing: .08em; text-transform: uppercase; }
+.strip .wrap { display: flex; gap: 14px; align-items: center; justify-content: center; padding-block: 9px; flex-wrap: wrap; text-align: center; }
+.strip b { color: var(--t-amber); font-weight: 600; }
+.led { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: var(--ok); box-shadow: 0 0 0 3px color-mix(in srgb, var(--ok) 22%, transparent); flex: none; }
+nav.top { position: sticky; top: 0; z-index: 20; background: color-mix(in srgb, var(--bg) 92%, transparent); backdrop-filter: blur(8px); border-bottom: 1px solid var(--line); }
+nav.top .wrap { display: flex; align-items: center; gap: 18px; padding-block: 12px; }
+.brand { display: flex; align-items: center; gap: 10px; font: 600 16px/1 var(--font-mono); color: var(--ink); text-decoration: none; letter-spacing: .02em; }
+nav.top .links { display: flex; gap: 18px; margin-left: auto; align-items: center; }
+nav.top .links a { font: 500 12px/1 var(--font-mono); text-transform: uppercase; letter-spacing: .1em; color: var(--muted); text-decoration: none; }
+nav.top .links a:hover { color: var(--ink); }
+nav.top .tools { display: flex; gap: 6px; }
+@media (max-width: 760px) { nav.top .links a.opt { display: none; } }
+
+/* Unités (sections) */
+section.unit { padding-block: clamp(64px, 10vh, 120px); border-bottom: 1px solid var(--line); scroll-margin-top: 64px; }
+.unit-head { display: grid; gap: 14px; margin-bottom: clamp(28px, 4vh, 44px); max-width: 900px; }
+
+/* Héros */
+.hero { padding-block: clamp(48px, 9vh, 104px) clamp(56px, 9vh, 96px); }
+.hero .grid { display: grid; grid-template-columns: minmax(0, .95fr) minmax(0, 1.15fr); gap: clamp(28px, 4vw, 64px); align-items: center; }
+@media (max-width: 1020px) { .hero .grid { grid-template-columns: minmax(0, 1fr); } }
+.hero h1 { font-weight: 800; font-size: clamp(44px, 4.9vw, 80px); line-height: .9; padding-bottom: 18px; border-bottom: 2px solid var(--ink); }
+.hero h1 span.l { display: block; }
+.hero h1 .acc { color: var(--amber); }
+.hero .copy { display: grid; gap: 22px; min-width: 0; }
+.cmdline { display: flex; align-items: center; gap: 10px; background: var(--code-bg); color: var(--code-fg); border-radius: 6px; padding: 10px 10px 10px 14px; font: 400 13.5px/1.4 var(--font-mono); min-width: 0; max-width: 560px; }
+.cmdline code { background: none; padding: 0; font-size: inherit; color: inherit; overflow-x: auto; white-space: nowrap; flex: 1; min-width: 0; }
+.cmdline .p { color: var(--t-amber); }
+.copybtn { font: 500 11px/1 var(--font-mono); text-transform: uppercase; letter-spacing: .08em; color: var(--t-dim); background: transparent; border: 1px solid var(--code-line); border-radius: 4px; padding: 7px 9px; cursor: pointer; flex: none; }
+.copybtn:hover { color: var(--code-fg); border-color: var(--t-dim); }
+.copybtn.done { color: var(--t-ok); border-color: var(--t-ok); }
+
+/* Fenêtre de terminal + rendu ANSI */
+.term { background: var(--code-bg); color: var(--code-fg); border-radius: 10px; overflow: hidden; border: 1px solid var(--code-line); box-shadow: 0 24px 60px -30px rgba(0,0,0,.6); min-width: 0; }
+.term-top { display: flex; gap: 7px; align-items: center; padding: 10px 12px; background: var(--code-top); border-bottom: 1px solid var(--code-line); }
+.term-top i { width: 11px; height: 11px; border-radius: 50%; background: #5A6B77; flex: none; }
+.term-top span { margin-left: 8px; font: 500 12px/1 var(--font-mono); color: #9FB0BB; flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.term-top .ctl { margin-left: auto; display: flex; gap: 6px; flex: none; }
+.screen { padding: 12px 14px; overflow-x: auto; overflow-y: hidden; }
+pre.ansi { margin: 0; font-family: var(--font-term); line-height: 1.22; white-space: pre; color: var(--code-fg); font-size: 11px; }
+pre.ansi .t { color: var(--t-teal); } pre.ansi .a { color: var(--t-amber); } pre.ansi .g { color: var(--t-ok); } pre.ansi .r { color: var(--t-fail); }
+pre.ansi .v { color: var(--t-violet); } pre.ansi .d { color: var(--t-dim); } pre.ansi .y { color: var(--t-warn); } pre.ansi .k { color: var(--t-black); } pre.ansi .w { color: var(--t-white); }
+pre.ansi .Bt { background: var(--t-teal); } pre.ansi .Ba { background: var(--t-amber); } pre.ansi .Bg { background: var(--t-ok); } pre.ansi .Br { background: var(--t-fail); } pre.ansi .Bv { background: var(--t-violet); } pre.ansi .Bd { background: var(--t-dim); }
+pre.ansi .b { font-weight: 700; } pre.ansi .i { font-style: italic; }
+.tbtn { font: 600 11px/1 var(--font-mono); color: var(--code-fg); background: transparent; border: 1px solid #3A4C58; border-radius: 4px; padding: 6px 9px; cursor: pointer; min-width: 30px; }
+.tbtn:hover { border-color: var(--t-dim); }
+.tbtn.main { background: var(--t-amber); border-color: var(--t-amber); color: var(--t-black); }
+
+/* 02 — comparaison */
+.compare { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; }
+@media (max-width: 900px) { .compare { grid-template-columns: minmax(0, 1fr); } }
+.compare .card { display: grid; gap: 14px; align-content: start; }
+.compare .card.us { border-color: var(--teal); box-shadow: 0 0 0 1px var(--teal) inset; }
+.compare .kind { font: 500 11.5px/1.3 var(--font-mono); text-transform: uppercase; letter-spacing: .12em; color: var(--muted); }
+.compare h3 { font: 800 30px/1 var(--font-display); text-transform: uppercase; margin: 0; }
+.compare .ex { font: 400 12.5px/1.4 var(--font-mono); color: var(--muted); }
+.meters { display: grid; gap: 10px; margin: 0; }
+.meter { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 4px 12px; align-items: center; }
+.meter dt { font: 500 11px/1.2 var(--font-mono); text-transform: uppercase; letter-spacing: .1em; color: var(--muted); }
+.meter dd { margin: 0; font: 500 11.5px/1 var(--font-mono); text-align: right; }
+.meter .bar { grid-column: 1 / -1; display: grid; grid-template-columns: repeat(3, 1fr); gap: 3px; }
+.meter .bar i { height: 6px; border-radius: 2px; background: var(--line); }
+.meter[data-v="1"] .bar i:nth-child(-n+1), .meter[data-v="2"] .bar i:nth-child(-n+2), .meter[data-v="3"] .bar i { background: var(--teal); }
+.meter.win dd { color: var(--ok); }
+.meter.lose dd { color: var(--amber); }
+.note { font: 400 12.5px/1.5 var(--font-mono); color: var(--muted); margin-top: 18px; }
+
+/* 03 — fichiers */
+.files { display: grid; grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr); gap: 16px; }
+@media (max-width: 1020px) { .files { grid-template-columns: minmax(0, 1fr); } }
+.code { margin: 0; font: 400 13px/1.7 var(--font-mono); padding: 12px 0; overflow-x: auto; max-height: 560px; overflow-y: auto; }
+.code .ln { display: grid; grid-template-columns: 44px minmax(0, 1fr) auto; align-items: center; padding-right: 12px; border-left: 3px solid transparent; transition: background .2s; }
+.code .ln > b { font-weight: 400; color: #3A4C58; text-align: right; padding-right: 14px; user-select: none; }
+.code .ln > span { white-space: pre; }
+.code .ln.mark { background: color-mix(in srgb, var(--t-amber) 10%, transparent); border-left-color: var(--t-amber); }
+.code .ln.mark.hot { background: color-mix(in srgb, var(--t-amber) 24%, transparent); }
+.code .tag { font: 600 11.5px/1 var(--font-mono); background: var(--t-amber); color: var(--t-black); border-radius: 999px; padding: 4px 10px; white-space: nowrap; margin-left: 10px; }
+.code .h { color: var(--t-amber); } .code .c { color: var(--t-dim); } .code .k { color: var(--t-violet); } .code .s { color: var(--t-teal); } .code .em { color: var(--t-teal); font-weight: 600; } .code .cd { color: var(--t-amber); }
+
+/* 04 — sorties : onglets */
+.tabs { display: flex; gap: 4px; border-bottom: 1px solid var(--line); margin-bottom: 18px; overflow-x: auto; }
+.tabs button { font: 500 13px/1 var(--font-mono); text-transform: uppercase; letter-spacing: .1em; color: var(--muted); background: none; border: 0; border-bottom: 2px solid transparent; padding: 14px 14px 12px; cursor: pointer; white-space: nowrap; display: flex; gap: 8px; align-items: center; }
+.tabs button .ext { color: var(--amber); text-transform: none; letter-spacing: 0; }
+.tabs button[aria-selected="true"] { color: var(--ink); border-color: var(--teal); }
+.tabpanel[hidden] { display: none; }
+.panel-grid { display: grid; grid-template-columns: minmax(0, 1fr) 300px; gap: 20px; align-items: start; }
+@media (max-width: 1020px) { .panel-grid { grid-template-columns: minmax(0, 1fr); } }
+.side { display: grid; gap: 12px; }
+.side .cmdline { max-width: none; }
+.frame { border: 1px solid var(--line); border-radius: 10px; overflow: hidden; background: var(--surface); }
+.frame .bar { display: flex; gap: 10px; align-items: center; padding: 9px 12px; border-bottom: 1px solid var(--line); font: 400 12px/1 var(--font-mono); color: var(--muted); }
+.frame .bar .url { flex: 1; min-width: 0; background: var(--bg); border-radius: 999px; padding: 6px 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.frame iframe { display: block; width: 100%; height: min(72vh, 640px); border: 0; background: var(--bg); }
+.slidepos { font: 500 11.5px/1 var(--font-mono); color: var(--t-dim); }
+
+/* 05 — comment ça marche */
+.how { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; }
+@media (max-width: 900px) { .how { grid-template-columns: minmax(0, 1fr); } }
+.how .card { display: grid; gap: 12px; align-content: start; }
+.how .n { font: 800 44px/1 var(--font-display); color: var(--amber); }
+.how .wire { font: 500 11.5px/1.3 var(--font-mono); color: var(--teal); text-transform: uppercase; letter-spacing: .1em; border-top: 1px dashed var(--line); padding-top: 10px; }
+ol.pipe { --n: 5; list-style: none; margin: 32px 0 0; padding: 0; display: grid; grid-template-columns: repeat(var(--n), minmax(0, 1fr)); gap: 16px; counter-reset: step; }
+ol.pipe > li { counter-increment: step; position: relative; padding-top: 42px; opacity: .55; transition: opacity .3s; }
+ol.pipe > li.lit { opacity: 1; }
+ol.pipe > li::before { content: counter(step); position: absolute; top: 0; left: 0; width: 28px; height: 28px; border-radius: 50%; display: grid; place-items: center; font: 500 12px/1 var(--font-mono); border: 1px solid var(--line); background: var(--surface); color: var(--muted); transition: background .3s, color .3s, border-color .3s; z-index: 1; }
+ol.pipe > li::after { content: ""; position: absolute; top: 14px; left: 28px; right: -16px; height: 1px; background: var(--line); }
+ol.pipe > li:last-child::after { display: none; }
+ol.pipe > li.lit::before { background: var(--teal); border-color: var(--teal); color: var(--surface); }
+ol.pipe > li.lit:has(+ li.lit)::after { background: var(--teal); }
+ol.pipe b { display: block; font: 600 14px/1.3 var(--font-mono); }
+ol.pipe span { display: block; font-size: 13.5px; color: var(--muted); margin-top: 4px; }
+@media (max-width: 860px) {
+  ol.pipe { grid-template-columns: minmax(0, 1fr); }
+  ol.pipe > li { padding: 0 0 0 44px; }
+  ol.pipe > li::after { top: 28px; left: 14px; right: auto; width: 1px; height: calc(100% - 12px); }
+}
+
+/* 06 — honnête */
+.honest { display: grid; grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr); gap: 16px; align-items: start; }
+@media (max-width: 1020px) { .honest { grid-template-columns: minmax(0, 1fr); } }
+.qa { display: grid; gap: 14px; }
+.qa .q { font: 800 clamp(26px, 3vw, 36px)/1 var(--font-display); text-transform: uppercase; }
+.checks { list-style: none; margin: 0; padding: 0; display: grid; gap: 10px; }
+.checks li { display: grid; grid-template-columns: 22px minmax(0, 1fr); gap: 8px; }
+.checks li::before { content: "✔"; color: var(--ok); font-family: var(--font-mono); }
+.checks.no li::before { content: "–"; color: var(--amber); }
+.callout { border-left: 3px solid var(--amber); padding: 10px 14px; background: color-mix(in srgb, var(--amber) 8%, transparent); border-radius: 0 6px 6px 0; }
+.replaybar { overflow-x: auto; border-radius: 6px; background: var(--code-bg); padding: 10px 12px; }
+
+/* 07 — démarrer */
+.qs { display: grid; grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr); gap: 20px; align-items: start; }
+@media (max-width: 1020px) { .qs { grid-template-columns: minmax(0, 1fr); } }
+.qsl { padding: 14px 18px; display: grid; gap: 4px; font: 400 14px/1.6 var(--font-mono); color: var(--code-fg); }
+.qsl > div { display: grid; grid-template-columns: 31em minmax(0, 1fr); gap: 4px 18px; }
+.qsl > div > span:first-child { white-space: nowrap; }
+.qsl .p { color: var(--t-amber); } .qsl .c { color: var(--t-dim); }
+@media (max-width: 760px) { .qsl > div { grid-template-columns: minmax(0, 1fr); margin-bottom: 8px; } }
+.req { display: grid; gap: 10px; }
+
+/* 08 — Claude Code */
+.cc { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 20px; align-items: start; }
+@media (max-width: 1020px) { .cc { grid-template-columns: minmax(0, 1fr); } }
+.ccout { padding: 18px 20px; font: 400 13.5px/1.75 var(--font-mono); color: var(--code-fg); overflow-x: auto; }
+.ccout .hdr { display: inline-block; border: 1.5px solid #D97757; border-radius: 6px; padding: 6px 14px; margin-bottom: 12px; }
+.ccout .star { color: #D97757; }
+.ccout .prompt { background: #1A2731; border-radius: 4px; padding: 6px 10px; margin-bottom: 10px; white-space: nowrap; }
+.ccout .sl { color: #D97757; font-weight: 600; }
+.ccout .tool { white-space: nowrap; } .ccout .tool .dot { color: var(--t-ok); } .ccout .tool b { font-weight: 600; }
+.ccout .res { color: var(--t-dim); padding-left: 22px; white-space: nowrap; }
+.ccout .okl { color: var(--t-ok); padding-left: 22px; white-space: nowrap; }
+.ccout .okl span { color: var(--code-fg); }
+video { width: 100%; border-radius: 10px; border: 1px solid var(--line); display: block; background: var(--code-bg); }
+.clear { margin-top: clamp(48px, 8vh, 88px); text-align: center; display: grid; gap: 18px; justify-items: center; }
+.clear .big { font: 800 clamp(40px, 6.5vw, 96px)/.95 var(--font-display); text-transform: uppercase; }
+.clear .big .acc { color: var(--ok); }
+
+/* Pied */
+footer { padding-block: 56px 40px; }
+footer .grid { display: grid; grid-template-columns: minmax(0, 1.4fr) repeat(3, minmax(0, 1fr)); gap: 24px; }
+@media (max-width: 860px) { footer .grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+footer h4 { font: 500 11.5px/1 var(--font-mono); text-transform: uppercase; letter-spacing: .12em; color: var(--muted); margin: 0 0 12px; }
+footer ul { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+footer a { color: var(--ink); text-decoration: none; }
+footer a:hover { color: var(--teal); }
+footer .fine { margin-top: 36px; font: 400 12px/1.5 var(--font-mono); color: var(--muted); display: flex; gap: 16px; flex-wrap: wrap; justify-content: space-between; }
+
+/* Bandeau bas : rangée de LED de la baie */
+.hud { position: fixed; left: 0; right: 0; bottom: 0; z-index: 30; background: var(--code-bg); color: var(--code-fg); border-top: 1px solid var(--code-line); font: 500 11.5px/1 var(--font-mono); letter-spacing: .06em; text-transform: uppercase; }
+.hud .wrap { display: flex; align-items: center; gap: 18px; padding-block: 10px; max-width: none; }
+.hud .leds { display: flex; gap: 7px; }
+.hud .leds button { width: 12px; height: 12px; border-radius: 50%; border: 0; padding: 0; background: #283944; cursor: pointer; }
+.hud .leds button.seen { background: var(--t-ok); }
+.hud .leds button.cur { background: var(--t-amber); box-shadow: 0 0 0 4px color-mix(in srgb, var(--t-amber) 30%, transparent); }
+.hud .unitname { white-space: nowrap; }
+.hud .unitname b { color: var(--t-amber); font-weight: 600; }
+.hud .keys { color: var(--t-dim); margin-left: auto; white-space: nowrap; }
+.hud .keys kbd { font: inherit; color: var(--code-fg); border: 1px solid #3A4C58; border-radius: 3px; padding: 2px 5px; margin: 0 2px; }
+.hud .run { white-space: nowrap; }
+.hud .run .st { padding: 3px 7px; border-radius: 3px; color: var(--t-black); font-weight: 600; background: var(--t-amber); margin-left: 6px; }
+.hud .run .st.okst { background: var(--t-ok); }
+.hud .count { color: var(--t-dim); white-space: nowrap; }
+@media (max-width: 980px) { .hud .keys { display: none; } .hud .run { margin-left: auto; } }
+@media (max-width: 560px) { .hud .count, .hud .unitname span { display: none; } .hud .wrap { gap: 12px; } }
+
+:focus-visible { outline: 2px solid var(--teal); outline-offset: 2px; }
+@media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } * { transition: none !important; animation: none !important; } }
+
+/* ---- flw additions ---- */
+/* hero: copy on top in two columns, the TUI full width below (it is 136 columns wide) */
+.hero .grid { grid-template-columns: minmax(0, 1fr); gap: clamp(28px, 4vh, 44px); }
+.hero .copy { grid-template-columns: minmax(0, 1.05fr) minmax(0, 1fr); column-gap: clamp(28px, 4vw, 64px); align-items: end; }
+.hero .copy .eyebrow, .hero .copy h1 { grid-column: 1; }
+.hero .copy h1 { grid-row: 2 / span 3; align-self: end; }
+.hero .copy .lead, .hero .copy .btns, .hero .copy .cmdline { grid-column: 2; }
+@media (max-width: 1020px) { .hero .copy { grid-template-columns: minmax(0, 1fr); } .hero .copy > * { grid-column: 1 !important; grid-row: auto !important; } }
+pre.ansi .w2 { display: inline-block; width: 2ch; text-align: center; overflow: hidden; vertical-align: top; }
+.hero .copy .lead { grid-row: 2; } .hero .copy .btns { grid-row: 3; } .hero .copy .cmdline { grid-row: 4; }
+.screen { scrollbar-width: thin; scrollbar-color: #3A4C58 transparent; }
+@media (max-width: 560px) { .hud .run { display: none; } }
+pre.ansi .d2 { color: #4F6370; }
+pre.ansi .Bs { background: #1E3942; }
+pre.ansi .Bt { color: var(--t-black); }
+.hud .run .st.idle { background: var(--t-dim); }
+.rules { list-style: none; margin: 0; padding: 14px 18px 16px; display: grid; gap: 2px; font: 400 13px/1.55 var(--font-mono); color: var(--code-fg); counter-reset: r; }
+.rules li { counter-increment: r; display: grid; grid-template-columns: 26px minmax(0, 1fr) auto; gap: 10px; align-items: baseline; padding: 5px 0; border-bottom: 1px dashed var(--code-line); }
+.rules li:last-child { border-bottom: 0; }
+.rules li::before { content: counter(r); color: var(--t-dim); text-align: right; }
+.rules .who { color: var(--t-amber); white-space: nowrap; }
+.rules .who.them { color: var(--t-teal); }
+.rules .who.none { color: var(--t-dim); }
+.rules small { display: block; color: var(--t-dim); font-size: 12px; }
+.rulefoot { padding: 12px 18px 16px; border-top: 1px solid var(--code-line); font: 400 12.5px/1.6 var(--font-mono); color: var(--t-dim); display: grid; gap: 4px; }
+.rulefoot b { color: var(--code-fg); font-weight: 500; }
+.legend { display: flex; flex-wrap: wrap; gap: 8px 18px; margin-top: 14px; font: 500 12px/1.4 var(--font-mono); color: var(--muted); }
+.legend span { display: inline-flex; gap: 8px; align-items: center; }
+.legend i { font-style: normal; padding: 2px 6px; border-radius: 3px; background: var(--code-bg); }
+.legend .a { color: var(--t-amber); } .legend .r { color: var(--t-fail); } .legend .t { color: var(--t-teal); } .legend .y { color: var(--t-warn); } .legend .d { color: var(--t-dim); }
+/* 08 — Rex Activity panel and notifications (from real records) */
+.rexgrid { display: grid; grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr); gap: 20px; align-items: start; }
+@media (max-width: 1020px) { .rexgrid { grid-template-columns: minmax(0, 1fr); } }
+.activity { padding: 6px 0 10px; }
+.activity .row { display: grid; grid-template-columns: 14px minmax(0, 1fr); gap: 10px; padding: 9px 16px; border-bottom: 1px solid var(--code-line); font: 400 12.5px/1.45 var(--font-mono); }
+.activity .row:last-child { border-bottom: 0; }
+.activity .dot { width: 9px; height: 9px; border-radius: 50%; margin-top: 4px; background: var(--t-dim); }
+.activity .blocked .dot { background: var(--t-amber); box-shadow: 0 0 0 3px color-mix(in srgb, var(--t-amber) 25%, transparent); }
+.activity .done .dot { background: var(--t-ok); }
+.activity .error .dot { background: var(--t-fail); }
+.activity .ttl { color: var(--code-fg); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.activity .msg { color: var(--t-dim); }
+.activity .blocked .msg { color: var(--t-amber); }
+.activity .done .msg { color: var(--t-ok); }
+.activity .root .ttl { color: var(--t-white); font-weight: 600; }
+.activity .row.new { background: color-mix(in srgb, var(--t-ok) 9%, transparent); }
+.seg { display: inline-flex; border: 1px solid #3A4C58; border-radius: 4px; overflow: hidden; }
+.seg button { font: 500 11px/1 var(--font-mono); text-transform: uppercase; letter-spacing: .06em; color: var(--t-dim); background: none; border: 0; padding: 6px 9px; cursor: pointer; }
+.seg button[aria-pressed="true"] { background: var(--t-amber); color: var(--t-black); }
+.term-top .seg span { color: inherit; margin: 0; flex: none; overflow: visible; }
+.toasts { display: grid; gap: 10px; }
+.toast { display: grid; grid-template-columns: 34px minmax(0, 1fr); gap: 12px; align-items: center; background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 12px 14px; box-shadow: 0 10px 30px -18px rgba(0,0,0,.45); opacity: 0; transform: translateY(8px); transition: opacity .35s, transform .35s; }
+.toast.on { opacity: 1; transform: none; }
+.toast .ico { width: 34px; height: 34px; border-radius: 8px; background: var(--code-bg); display: grid; place-items: center; color: var(--t-amber); font: 600 15px/1 var(--font-mono); }
+.toast b { display: block; font: 600 13px/1.3 var(--font-body); }
+.toast span { display: block; font-size: 13px; color: var(--muted); overflow-wrap: anywhere; }
+.keysgrid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px 18px; font: 400 13px/1.5 var(--font-mono); }
+.keysgrid kbd { font: 600 12px/1 var(--font-mono); border: 1px solid var(--line); border-bottom-width: 2px; border-radius: 4px; padding: 3px 6px; margin-right: 8px; background: var(--surface); display: inline-block; min-width: 22px; text-align: center; }
+@media (max-width: 560px) { .keysgrid { grid-template-columns: minmax(0, 1fr); } }
+</style>
+</head>
+<body>
+
+<div class="strip"><div class="wrap">
+  <span class="led" aria-hidden="true"></span>
+  <span><b>MIT</b> · <span data-l="fr">un seul binaire Go</span><span data-l="en">one Go binary</span> · <span data-l="fr">sur glab</span><span data-l="en">on top of glab</span> · <span data-l="fr">100 % clavier</span><span data-l="en">keyboard only</span></span>
+</div></div>
+
+<nav class="top" aria-label="Navigation">
+  <div class="wrap">
+    <a class="brand" href="#u1"><span class="led" aria-hidden="true"></span>flw</a>
+    <div class="links">
+      <a class="opt" href="#u4"><span data-l="fr">écrans</span><span data-l="en">screens</span></a>
+      <a class="opt" href="#u7"><span data-l="fr">démarrer</span><span data-l="en">get started</span></a>
+      <a class="opt" href="https://github.com/jgsqware/flw#readme">README</a>
+      <a class="btn" href="https://github.com/jgsqware/flw">★ GitHub</a>
+      <div class="tools">
+        <button class="iconbtn" id="langBtn" type="button" aria-label="Language / langue">FR · EN</button>
+        <button class="iconbtn" id="themeBtn" type="button" aria-label="Light / dark theme">◐</button>
+      </div>
+    </div>
+  </div>
+</nav>
+
+<main>
+<!-- 01 — hero -->
+<section class="unit hero" id="u1" data-name-fr="accueil" data-name-en="home">
+  <div class="wrap grid">
+    <div class="copy">
+      <div class="eyebrow"><span class="num">01</span><span data-l="fr">vos merge requests GitLab, au clavier</span><span data-l="en">your GitLab merge requests, from the keyboard</span></div>
+      <h1>
+        <span data-l="fr"><span class="l">À qui la balle&nbsp;?</span><span class="l">À toi, ou à eux.</span><span class="l acc">Relance au bon moment.</span></span>
+        <span data-l="en"><span class="l">Whose turn is it?</span><span class="l">Yours, or theirs.</span><span class="l acc">Ping when it's time.</span></span>
+      </h1>
+      <p class="lead">
+        <span data-l="fr">flw est une interface terminal pour GitLab, façon k9s ou lazygit, construite sur <code>glab</code>. Pour chaque MR, elle dit qui doit agir, quoi, et depuis combien de jours ouvrés, puis quand il est temps de relancer. Et une deuxième fois.</span>
+        <span data-l="en">flw is a terminal UI for GitLab, k9s or lazygit style, built on <code>glab</code>. For every MR it tells you who must act, what, and for how many business days, then when it is time to ping them. And to ping them again.</span>
+      </p>
+      <div class="btns">
+        <a class="btn primary" href="#u7"><span data-l="fr">Démarrer</span><span data-l="en">Get started</span> →</a>
+        <a class="btn" href="#u4"><span data-l="fr">Voir les écrans</span><span data-l="en">See the screens</span></a>
+      </div>
+      <div class="cmdline"><code><span class="p">$ </span>go install github.com/jgsqware/flw@latest</code><button class="copybtn" type="button" data-copy="go install github.com/jgsqware/flw@latest">copy</button></div>
+    </div>
+    <div class="term" aria-label="flw">
+      <div class="term-top"><i></i><i></i><i></i><span>$ flw</span>
+        <div class="ctl"><button class="tbtn" type="button" data-player="hero" data-act="restart" aria-label="Restart">⏮</button></div>
+      </div>
+      <div class="screen"><pre class="ansi" data-fit="136" data-max="15" id="heroScreen" aria-hidden="true"></pre></div>
+    </div>
+  </div>
+</section>
+
+<!-- 02 — why -->
+<section class="unit" id="u2" data-name-fr="pourquoi" data-name-en="why">
+  <div class="wrap">
+    <div class="unit-head">
+      <div class="eyebrow"><span class="num">02</span><span data-l="fr">pourquoi</span><span data-l="en">why</span></div>
+      <h2><span data-l="fr">Une MR bloquée ne fait pas de bruit.<span class="dim">Elle attend quelqu'un.</span></span><span data-l="en">A stuck MR makes no noise.<span class="dim">It waits for someone.</span></span></h2>
+      <p class="lead muted"><span data-l="fr">GitLab montre l'état de chaque MR. Il ne dit pas qui la bloque, ni depuis combien de temps. flw lit les reviewers, les fils de discussion, le pipeline et les mentions, et en tire la prochaine action.</span><span data-l="en">GitLab shows the state of every MR. It doesn't say who is holding it up, or for how long. flw reads the reviewers, the threads, the pipeline and the mentions, and works out the next action.</span></p>
+    </div>
+    <div class="compare">
+      <article class="card">
+        <div class="kind"><span data-l="fr">le navigateur</span><span data-l="en">the browser</span></div>
+        <h3><span data-l="fr">GitLab web</span><span data-l="en">GitLab web</span></h3>
+        <div class="ex">To-Do List · merge request dashboard</div>
+        <dl class="meters">
+          <div class="meter" data-v="1"><dt><span data-l="fr">qui doit agir, d'un coup d'œil</span><span data-l="en">who must act, at a glance</span></dt><dd><span data-l="fr">en partie</span><span data-l="en">partly</span></dd><div class="bar"><i></i><i></i><i></i></div></div>
+          <div class="meter" data-v="0"><dt><span data-l="fr">quand relancer</span><span data-l="en">when to ping</span></dt><dd><span data-l="fr">non</span><span data-l="en">no</span></dd><div class="bar"><i></i><i></i><i></i></div></div>
+          <div class="meter" data-v="0"><dt><span data-l="fr">au clavier</span><span data-l="en">keyboard only</span></dt><dd><span data-l="fr">peu</span><span data-l="en">barely</span></dd><div class="bar"><i></i><i></i><i></i></div></div>
+          <div class="meter win" data-v="3"><dt><span data-l="fr">toutes les fonctions GitLab</span><span data-l="en">every GitLab feature</span></dt><dd><span data-l="fr">oui — gagne ici</span><span data-l="en">yes — wins here</span></dd><div class="bar"><i></i><i></i><i></i></div></div>
+        </dl>
+      </article>
+      <article class="card">
+        <div class="kind"><span data-l="fr">la ligne de commande</span><span data-l="en">the command line</span></div>
+        <h3>glab</h3>
+        <div class="ex">glab mr list · glab ci view · glab mr view</div>
+        <dl class="meters">
+          <div class="meter" data-v="0"><dt><span data-l="fr">qui doit agir, d'un coup d'œil</span><span data-l="en">who must act, at a glance</span></dt><dd><span data-l="fr">non</span><span data-l="en">no</span></dd><div class="bar"><i></i><i></i><i></i></div></div>
+          <div class="meter" data-v="0"><dt><span data-l="fr">quand relancer</span><span data-l="en">when to ping</span></dt><dd><span data-l="fr">non</span><span data-l="en">no</span></dd><div class="bar"><i></i><i></i><i></i></div></div>
+          <div class="meter" data-v="3"><dt><span data-l="fr">au clavier</span><span data-l="en">keyboard only</span></dt><dd><span data-l="fr">oui</span><span data-l="en">yes</span></dd><div class="bar"><i></i><i></i><i></i></div></div>
+          <div class="meter win" data-v="3"><dt><span data-l="fr">scriptable</span><span data-l="en">scriptable</span></dt><dd><span data-l="fr">oui — gagne ici</span><span data-l="en">yes — wins here</span></dd><div class="bar"><i></i><i></i><i></i></div></div>
+        </dl>
+      </article>
+      <article class="card us">
+        <div class="kind"><span data-l="fr">la prochaine action, et qui la doit</span><span data-l="en">the next action, and who owes it</span></div>
+        <h3>flw</h3>
+        <div class="ex">NEXT · ping · re-ping · snooze</div>
+        <dl class="meters">
+          <div class="meter" data-v="3"><dt><span data-l="fr">qui doit agir, d'un coup d'œil</span><span data-l="en">who must act, at a glance</span></dt><dd><span data-l="fr">oui, colonne NEXT</span><span data-l="en">yes, the NEXT column</span></dd><div class="bar"><i></i><i></i><i></i></div></div>
+          <div class="meter" data-v="3"><dt><span data-l="fr">quand relancer</span><span data-l="en">when to ping</span></dt><dd><span data-l="fr">oui, en jours ouvrés</span><span data-l="en">yes, in business days</span></dd><div class="bar"><i></i><i></i><i></i></div></div>
+          <div class="meter" data-v="3"><dt><span data-l="fr">au clavier</span><span data-l="en">keyboard only</span></dt><dd><span data-l="fr">oui</span><span data-l="en">yes</span></dd><div class="bar"><i></i><i></i><i></i></div></div>
+          <div class="meter lose" data-v="1"><dt><span data-l="fr">toutes les fonctions GitLab</span><span data-l="en">every GitLab feature</span></dt><dd><span data-l="fr">non — MR, pipelines, issues</span><span data-l="en">no — MRs, pipelines, issues</span></dd><div class="bar"><i></i><i></i><i></i></div></div>
+        </dl>
+      </article>
+    </div>
+    <p class="note"><span data-l="fr">Comparaison qualitative. Pour tout ce que flw ne couvre pas, <code>o</code> ouvre la page dans le navigateur.</span><span data-l="en">A qualitative comparison. For anything flw doesn't cover, <code>o</code> opens the page in the browser.</span></p>
+  </div>
+</section>
+
+<!-- 03 — inputs -->
+<section class="unit" id="u3" data-name-fr="ce qu'il lit" data-name-en="what it reads">
+  <div class="wrap">
+    <div class="unit-head">
+      <div class="eyebrow"><span class="num">03</span><span data-l="fr">ce qu'il lit</span><span data-l="en">what it reads</span></div>
+      <h2><span data-l="fr">Votre login glab.<span class="dim">Un fichier YAML, si vous voulez.</span></span><span data-l="en">Your glab login.<span class="dim">One YAML file, if you want.</span></span></h2>
+      <p class="lead muted"><span data-l="fr">L'hôte et le compte viennent de <code>glab</code>. La config est facultative : reviewers par défaut, seuils de relance, notifications. À droite, les règles qui remplissent la colonne NEXT, dans l'ordre où flw les applique.</span><span data-l="en">Host and account come from <code>glab</code>. The config is optional: default reviewers, ping thresholds, notifications. On the right, the rules that fill the NEXT column, in the order flw applies them.</span></p>
+    </div>
+    <div class="files">
+      <div class="term"><div class="term-top"><i></i><i></i><i></i><span>~/.config/flw/config.yaml</span></div><div class="code" id="fileYaml"></div></div>
+      <div class="term"><div class="term-top"><i></i><i></i><i></i><span><span data-l="fr">colonne NEXT — la première étape qui manque</span><span data-l="en">NEXT column — the first missing step</span></span></div>
+        <ol class="rules">
+          <li><span><span data-l="fr">pipeline en échec</span><span data-l="en">pipeline failed</span></span><span class="who">author: fix CI</span></li>
+          <li><span><span data-l="fr">conflit ou rebase nécessaire</span><span data-l="en">conflict, or rebase needed</span></span><span class="who">author: fix conflict</span></li>
+          <li><span><span data-l="fr">un reviewer a demandé des changements</span><span data-l="en">a reviewer requested changes</span></span><span class="who">author: address changes</span></li>
+          <li><span><span data-l="fr">fil ouvert, dernier mot d'un autre</span><span data-l="en">open thread, someone else spoke last</span></span><span class="who">author: reply N threads</span></li>
+          <li><span><span data-l="fr">fil ouvert, l'auteur a répondu</span><span data-l="en">open thread, the author answered</span></span><span class="who them">starter: answer N threads</span></li>
+          <li><span><span data-l="fr">approbation manquante</span><span data-l="en">approval missing</span><small><span data-l="fr">sans reviewer : l'auteur doit en demander un</span><span data-l="en">no reviewer: the author must request one</span></small></span><span class="who them">reviewers: review / approve</span></li>
+          <li><span><span data-l="fr">tout est vert</span><span data-l="en">all green</span></span><span class="who">author: merge</span></li>
+          <li><span><span data-l="fr">brouillon, CI en cours, auto-merge</span><span data-l="en">draft, CI running, auto-merge set</span></span><span class="who none">· <span data-l="fr">rien à relancer</span><span data-l="en">nothing to ping</span></span></li>
+        </ol>
+        <div class="rulefoot">
+          <span><b><span data-l="fr">Votre étape d'abord</span><span data-l="en">Your step first</span></b> — <span data-l="fr">si l'une des étapes est à vous, NEXT affiche celle-là.</span><span data-l="en">if any step is yours, NEXT shows that one.</span></span>
+          <span><b>ping</b> — <span data-l="fr">après 1 jour ouvré d'attente (<code>ping</code>).</span><span data-l="en">after 1 business day of waiting (<code>ping</code>).</span></span>
+          <span><b>re-ping</b> — <span data-l="fr">après 3 jours, ou 1 jour après une relance restée sans réponse.</span><span data-l="en">after 3 days, or 1 day after an unanswered ping.</span></span>
+          <span><b>@mention</b> — <span data-l="fr">compte comme une relance et ne remet pas le compteur à zéro.</span><span data-l="en">counts as a ping and doesn't reset the clock.</span></span>
+        </div>
+      </div>
+    </div>
+    <div class="legend">
+      <span><i class="a">▶ you: merge</i> <span data-l="fr">à vous</span><span data-l="en">yours</span></span>
+      <span><i class="r">▶ you: … !</i> <span data-l="fr">à vous, en retard</span><span data-l="en">yours, overdue</span></span>
+      <span><i class="t">⏳ @sam: review</i> <span data-l="fr">en attente, récent</span><span data-l="en">waiting, fresh</span></span>
+      <span><i class="y">· ping</i> <span data-l="fr">à relancer</span><span data-l="en">time to ping</span></span>
+      <span><i class="r">· re-ping</i> <span data-l="fr">à relancer encore</span><span data-l="en">ping again</span></span>
+      <span><i class="d">💤 tomorrow 09:00</i> <span data-l="fr">reportée</span><span data-l="en">snoozed</span></span>
+    </div>
+  </div>
+</section>
+
+<!-- 04 — screens -->
+<section class="unit" id="u4" data-name-fr="écrans" data-name-en="screens">
+  <div class="wrap">
+    <div class="unit-head">
+      <div class="eyebrow"><span class="num">04</span><span data-l="fr">cinq écrans</span><span data-l="en">five screens</span></div>
+      <h2><span data-l="fr">Du tableau de bord<span class="dim">jusqu'à la ligne de log.</span></span><span data-l="en">From the dashboard<span class="dim">down to the log line.</span></span></h2>
+      <p class="lead muted"><span data-l="fr">Tout ce qui suit est le vrai flw, enregistré écran par écran sur une entreprise fictive (acme) servie par un faux <code>glab</code>.</span><span data-l="en">Everything below is the real flw, recorded screen by screen against a fictional company (acme) served by a fake <code>glab</code>.</span></p>
+    </div>
+    <div class="tabs" role="tablist">
+      <button role="tab" type="button" aria-selected="true" aria-controls="p-dash" id="t-dash"><span data-l="fr">Tableau de bord</span><span data-l="en">Dashboard</span> <span class="ext">t</span></button>
+      <button role="tab" type="button" aria-selected="false" aria-controls="p-detail" id="t-detail">MR <span class="ext">enter</span></button>
+      <button role="tab" type="button" aria-selected="false" aria-controls="p-act" id="t-act"><span data-l="fr">Agir</span><span data-l="en">Act</span> <span class="ext">n v z</span></button>
+      <button role="tab" type="button" aria-selected="false" aria-controls="p-pipe" id="t-pipe">Pipelines <span class="ext">p l</span></button>
+      <button role="tab" type="button" aria-selected="false" aria-controls="p-diff" id="t-diff">Diff <span class="ext">d</span></button>
+    </div>
+
+    <div class="tabpanel" role="tabpanel" id="p-dash" aria-labelledby="t-dash">
+      <div class="panel-grid">
+        <div class="term"><div class="term-top"><i></i><i></i><i></i><span>$ flw</span><div class="ctl"><button class="tbtn" type="button" data-player="dash" data-act="restart" aria-label="Restart">⏮</button><button class="tbtn main" type="button" data-player="dash" data-act="toggle" aria-label="Play / pause">Ⅱ</button></div></div>
+          <div class="screen"><pre class="ansi" data-fit="136" id="dashScreen"></pre></div></div>
+        <div class="side">
+          <p><span data-l="fr">Vos MR (auteur, reviewer, assigné), triées par urgence : ce qui est à vous, puis ce qu'il faut relancer, puis le reste. <b>t</b> passe d'un filtre à l'autre : à moi, à relancer, en attente, à nettoyer, reportées.</span><span data-l="en">Your MRs (author, reviewer, assignee), sorted by urgency: yours first, then what needs a ping, then the rest. <b>t</b> cycles the focus: on me, to ping, waiting, to clean up, snoozed.</span></p>
+          <div class="cmdline"><code><span class="p">$ </span>flw</code><button class="copybtn" type="button" data-copy="flw">copy</button></div>
+          <p class="muted"><span data-l="fr">Dans un dépôt GitLab, flw ouvre les MR de ce projet ; <code>:my</code> revient au tableau de bord.</span><span data-l="en">Inside a GitLab repo flw opens that project's MRs; <code>:my</code> goes back to the dashboard.</span></p>
+        </div>
+      </div>
+    </div>
+
+    <div class="tabpanel" role="tabpanel" id="p-detail" aria-labelledby="t-detail" hidden>
+      <div class="panel-grid">
+        <div class="term"><div class="term-top"><i></i><i></i><i></i><span>!412 Rate-limit /search per API key</span><div class="ctl"><button class="tbtn" type="button" data-player="detail" data-act="restart" aria-label="Restart">⏮</button><button class="tbtn main" type="button" data-player="detail" data-act="toggle" aria-label="Play / pause">Ⅱ</button></div></div>
+          <div class="screen"><pre class="ansi" data-fit="136" id="detailScreen"></pre></div></div>
+        <div class="side">
+          <p><span data-l="fr">Le bandeau dit à qui c'est et depuis quand, puis les étapes suivantes. Ensuite : l'état de chaque reviewer (✔ ✎ ✘ ○), la description en Markdown, les fils avec fichier et ligne.</span><span data-l="en">The banner says whose turn it is and for how long, then the next steps. Below: each reviewer's state (✔ ✎ ✘ ○), the description as Markdown, the threads with file and line.</span></p>
+          <div class="keysgrid">
+            <span><kbd>a</kbd>approve</span><span><kbd>m</kbd>merge</span>
+            <span><kbd>M</kbd>auto-merge</span><span><kbd>r</kbd>rebase</span>
+            <span><kbd>c</kbd>comment</span><span><kbd>D</kbd>draft</span>
+            <span><kbd>o</kbd>browser</span><span><kbd>y</kbd>copy URL</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="tabpanel" role="tabpanel" id="p-act" aria-labelledby="t-act" hidden>
+      <div class="panel-grid">
+        <div class="term"><div class="term-top"><i></i><i></i><i></i><span>n · v · z</span><div class="ctl"><button class="tbtn" type="button" data-player="act" data-act="restart" aria-label="Restart">⏮</button><button class="tbtn main" type="button" data-player="act" data-act="toggle" aria-label="Play / pause">Ⅱ</button></div></div>
+          <div class="screen"><pre class="ansi" data-fit="136" id="actScreen"></pre></div></div>
+        <div class="side">
+          <p><b>n</b> — <span data-l="fr">relance : un commentaire pré-rempli avec les <code>@</code> des personnes attendues, « gentle reminder » la deuxième fois. Vous relisez, <b>ctrl+s</b> l'envoie.</span><span data-l="en">ping: a comment prefilled with the <code>@</code> of the people you wait on, "gentle reminder" the second time. You read it, <b>ctrl+s</b> sends it.</span></p>
+          <p><b>v</b> — <span data-l="fr">reviewers : la liste actuelle, ou vos reviewers par défaut. <b>V</b> les ajoute d'un coup.</span><span data-l="en">reviewers: the current list, or your default reviewers. <b>V</b> adds them in one go.</span></p>
+          <p><b>z</b> — <span data-l="fr">reporter : <code>demain</code>, <code>lundi</code>, <code>2h</code>, <code>14:00</code>… La MR sort des compteurs et revient avec un rappel.</span><span data-l="en">snooze: <code>tomorrow</code>, <code>monday</code>, <code>2h</code>, <code>14:00</code>… The MR leaves the counts and comes back with a reminder.</span></p>
+        </div>
+      </div>
+    </div>
+
+    <div class="tabpanel" role="tabpanel" id="p-pipe" aria-labelledby="t-pipe" hidden>
+      <div class="panel-grid">
+        <div class="term"><div class="term-top"><i></i><i></i><i></i><span>p → enter → l</span><div class="ctl"><button class="tbtn" type="button" data-player="pipe" data-act="restart" aria-label="Restart">⏮</button><button class="tbtn main" type="button" data-player="pipe" data-act="toggle" aria-label="Play / pause">Ⅱ</button></div></div>
+          <div class="screen"><pre class="ansi" data-fit="136" id="pipeScreen"></pre></div></div>
+        <div class="side">
+          <p><span data-l="fr">Pipelines de la MR, jobs par étape, puis le log nettoyé (sections, horodatages et codes de contrôle retirés). Le log suit le job tant qu'il tourne.</span><span data-l="en">The MR's pipelines, jobs by stage, then the log, cleaned up (sections, timestamps and control codes removed). The log follows the job while it runs.</span></p>
+          <div class="keysgrid">
+            <span><kbd>R</kbd>retry</span><span><kbd>C</kbd>cancel</span>
+            <span><kbd>P</kbd>play</span><span><kbd>f</kbd>follow</span>
+            <span><kbd>w</kbd>wrap</span><span><kbd>/</kbd>search</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="tabpanel" role="tabpanel" id="p-diff" aria-labelledby="t-diff" hidden>
+      <div class="panel-grid">
+        <div class="term"><div class="term-top"><i></i><i></i><i></i><span>d · ] [</span><div class="ctl"><button class="tbtn" type="button" data-player="diff" data-act="restart" aria-label="Restart">⏮</button><button class="tbtn main" type="button" data-player="diff" data-act="toggle" aria-label="Play / pause">Ⅱ</button></div></div>
+          <div class="screen"><pre class="ansi" data-fit="136" id="diffScreen"></pre></div></div>
+        <div class="side">
+          <p><span data-l="fr">Le diff de la MR, fichier par fichier, avec les numéros de ligne. <b>]</b> et <b>[</b> sautent au fichier suivant ou précédent.</span><span data-l="en">The MR's diff, file by file, with line numbers. <b>]</b> and <b>[</b> jump to the next or previous file.</span></p>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- 05 — how it works -->
+<section class="unit" id="u5" data-name-fr="mécanique" data-name-en="how it works">
+  <div class="wrap">
+    <div class="unit-head">
+      <div class="eyebrow"><span class="num">05</span><span data-l="fr">comment ça marche</span><span data-l="en">how it works</span></div>
+      <h2><span data-l="fr">Il ne devine pas.<span class="dim">Il lit l'historique de la MR.</span></span><span data-l="en">It doesn't guess.<span class="dim">It reads the MR's history.</span></span></h2>
+    </div>
+    <div class="how">
+      <article class="card">
+        <div class="n">01</div>
+        <h3><span data-l="fr">Tout passe par glab</span><span data-l="en">Everything goes through glab</span></h3>
+        <p class="muted"><span data-l="fr"><code>glab api</code> en GraphQL et REST : même login, même hôte, aucun jeton à gérer. Trois requêtes en parallèle pour vos listes, sous la limite de complexité de GitLab.</span><span data-l="en"><code>glab api</code>, GraphQL and REST: same login, same host, no token to manage. Three parallel queries for your lists, under GitLab's complexity limit.</span></p>
+        <div class="wire">graphql · rest · glab auth</div>
+      </article>
+      <article class="card">
+        <div class="n">02</div>
+        <h3><span data-l="fr">Le calcul du tour</span><span data-l="en">The turn engine</span></h3>
+        <p class="muted"><span data-l="fr">État de review de chaque reviewer, auteur du premier et du dernier message de chaque fil, dernier commit, pipeline, conflits, mentions. Le temps d'attente se compte en jours ouvrés, week-ends exclus.</span><span data-l="en">Each reviewer's review state, who opened and who last spoke in each thread, last commit, pipeline, conflicts, mentions. Waiting time is counted in business days, weekends excluded.</span></p>
+        <div class="wire">reviewState · threads · @mentions</div>
+      </article>
+      <article class="card">
+        <div class="n">03</div>
+        <h3><span data-l="fr">Cache et service</span><span data-l="en">Cache and service</span></h3>
+        <p class="muted"><span data-l="fr">Chaque lecture est gardée dans <code>~/.cache/flw</code> : l'écran s'affiche tout de suite, puis se met à jour. <code>flw service install</code> lance un service systemd qui garde le cache chaud.</span><span data-l="en">Every read is kept in <code>~/.cache/flw</code>: the screen shows at once, then refreshes. <code>flw service install</code> starts a systemd service that keeps the cache warm.</span></p>
+        <div class="wire">~/.cache/flw · systemd --user</div>
+      </article>
+    </div>
+    <ol class="pipe" id="pipe" style="--n: 6">
+      <li><b><span data-l="fr">vos listes</span><span data-l="en">your lists</span></b><span><span data-l="fr">auteur, reviewer, assigné : 3 requêtes</span><span data-l="en">author, reviewer, assignee: 3 queries</span></span></li>
+      <li><b><span data-l="fr">les étapes</span><span data-l="en">the steps</span></b><span><span data-l="fr">ce qui manque à chaque MR, dans l'ordre</span><span data-l="en">what each MR is missing, in order</span></span></li>
+      <li><b><span data-l="fr">votre étape</span><span data-l="en">your step</span></b><span><span data-l="fr">la première qui est à vous l'emporte</span><span data-l="en">the first one that is yours wins</span></span></li>
+      <li><b><span data-l="fr">l'attente</span><span data-l="en">the wait</span></b><span><span data-l="fr">en jours ouvrés, mentions comprises</span><span data-l="en">in business days, mentions included</span></span></li>
+      <li><b>ping · re-ping</b><span><span data-l="fr">1 jour, puis 3 jours ou 1 jour après la relance</span><span data-l="en">1 day, then 3 days or 1 day after the ping</span></span></li>
+      <li><b><span data-l="fr">tri + notifs</span><span data-l="en">sort + notify</span></b><span><span data-l="fr">à vous d'abord ; ce qui change vous est signalé</span><span data-l="en">yours first; what changes is notified</span></span></li>
+    </ol>
+    <p style="margin-top:18px"><button class="iconbtn" type="button" id="pipeReplay">↻ <span data-l="fr">rejouer les étapes</span><span data-l="en">replay the steps</span></button></p>
+  </div>
+</section>
+
+<!-- 06 — honest -->
+<section class="unit" id="u6" data-name-fr="limites" data-name-en="limits">
+  <div class="wrap">
+    <div class="unit-head">
+      <div class="eyebrow"><span class="num">06</span><span data-l="fr">en clair</span><span data-l="en">plainly</span></div>
+      <h2><span data-l="fr">Il lit des indices.<span class="dim">Il peut se tromper.</span></span><span data-l="en">It reads clues.<span class="dim">It can be wrong.</span></span></h2>
+    </div>
+    <div class="honest">
+      <div class="card qa">
+        <div class="q"><span data-l="fr">« Comment sait-il que c'est à moi ? »</span><span data-l="en">"How does it know it's my turn?"</span></div>
+        <p class="muted"><span data-l="fr">Il ne le sait pas, il le déduit. Les règles sont fixes et visibles (unité 03) ; le détail de chaque MR montre toutes les étapes en attente, pas seulement la première.</span><span data-l="en">It doesn't know, it infers. The rules are fixed and visible (unit 03); each MR's detail shows every pending step, not only the first one.</span></p>
+        <ul class="checks">
+          <li><span data-l="fr">Un fil où l'auteur a répondu en dernier passe à celui qui l'a ouvert.</span><span data-l="en">A thread where the author spoke last goes back to whoever opened it.</span></li>
+          <li><span data-l="fr">Un commentaire avec <code>@</code> est une relance : il ne remet pas l'attente à zéro.</span><span data-l="en">A comment with an <code>@</code> is a ping: it doesn't reset the wait.</span></li>
+          <li><span data-l="fr">Les seuils se règlent : <code>flw -ping 4h -reping 24h</code> ou dans la config.</span><span data-l="en">Thresholds are yours: <code>flw -ping 4h -reping 24h</code> or in the config.</span></li>
+          <li><span data-l="fr">Rien n'est envoyé sans vous : chaque écriture passe par un éditeur ou une confirmation.</span><span data-l="en">Nothing is sent behind your back: every write goes through an editor or a confirmation.</span></li>
+        </ul>
+      </div>
+      <div class="card qa">
+        <div class="q"><span data-l="fr">Ce qu'il ne fait pas</span><span data-l="en">What it doesn't do</span></div>
+        <ul class="checks no">
+          <li><span data-l="fr">GitLab seulement : pas de GitHub, pas de Gitea.</span><span data-l="en">GitLab only: no GitHub, no Gitea.</span></li>
+          <li><span data-l="fr">Pas tout GitLab : MR, pipelines, jobs, issues. Le reste s'ouvre dans le navigateur.</span><span data-l="en">Not all of GitLab: MRs, pipelines, jobs, issues. The rest opens in the browser.</span></li>
+          <li><span data-l="fr">Les notifications ne partent que si flw est ouvert dans un terminal ; le service de cache, lui, n'a pas de terminal.</span><span data-l="en">Notifications only go out while flw is open in a terminal; the cache service has no terminal to send them through.</span></li>
+          <li><span data-l="fr">Les onglets par MR, Activity et le nettoyage demandent Rex, sur la même machine.</span><span data-l="en">Per-MR tabs, Activity and clean-up need Rex, on the same machine.</span></li>
+          <li><span data-l="fr">L'interface est en anglais.</span><span data-l="en">The interface is in English.</span></li>
+        </ul>
+        <div class="callout"><span data-l="fr">Le cache montre une copie de quelques secondes à quelques minutes, marquée <code>⟳ cached</code>, le temps que la version en direct arrive. <code>FLW_NO_CACHE=1</code> le coupe.</span><span data-l="en">The cache shows a copy a few seconds to minutes old, marked <code>⟳ cached</code>, until the live version arrives. <code>FLW_NO_CACHE=1</code> turns it off.</span></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- 07 — quick start -->
+<section class="unit" id="u7" data-name-fr="démarrer" data-name-en="get started">
+  <div class="wrap">
+    <div class="unit-head">
+      <div class="eyebrow"><span class="num">07</span><span data-l="fr">démarrage rapide</span><span data-l="en">quick start</span></div>
+      <h2><span data-l="fr">Si glab marche,<span class="dim">flw aussi.</span></span><span data-l="en">If glab works,<span class="dim">so does flw.</span></span></h2>
+    </div>
+    <div class="qs">
+      <div class="term">
+        <div class="term-top"><i></i><i></i><i></i><span>~</span><div class="ctl"><button class="copybtn" type="button" data-copy="go install github.com/jgsqware/flw@latest&#10;glab auth login&#10;flw&#10;flw config edit&#10;flw service install">copy</button></div></div>
+<div class="qsl"><div><span><span class="p">$</span> go install github.com/jgsqware/flw@latest</span><span class="c"># <span data-l="fr">un seul binaire</span><span data-l="en">one binary</span></span></div><div><span><span class="p">$</span> glab auth login</span><span class="c"># <span data-l="fr">si ce n'est pas déjà fait</span><span data-l="en">if not done already</span></span></div><div><span><span class="p">$</span> flw</span><span class="c"># <span data-l="fr">vos MR ; dans un dépôt : celles du projet</span><span data-l="en">your MRs; in a repo: the project's</span></span></div><div><span><span class="p">$</span> flw config edit</span><span class="c"># <span data-l="fr">reviewers par défaut, seuils, notifs</span><span data-l="en">default reviewers, thresholds, notifications</span></span></div><div><span><span class="p">$</span> flw service install</span><span class="c"># <span data-l="fr">cache gardé chaud (systemd)</span><span data-l="en">cache kept warm (systemd)</span></span></div></div>
+      </div>
+      <div class="req">
+        <div class="card"><h3><span data-l="fr">Ce qu'il faut</span><span data-l="en">What you need</span></h3><p class="muted"><span data-l="fr">Go ≥ 1.27 pour construire, <code>glab</code> connecté à votre GitLab (gitlab.com ou auto-hébergé). <code>-host</code> choisit une autre instance.</span><span data-l="en">Go ≥ 1.27 to build, <code>glab</code> logged in to your GitLab (gitlab.com or self-hosted). <code>-host</code> picks another instance.</span></p></div>
+        <div class="card"><h3><span data-l="fr">Les touches à retenir</span><span data-l="en">Keys to remember</span></h3>
+          <div class="keysgrid" style="margin-top:8px">
+            <span><kbd>t</kbd>focus</span><span><kbd>enter</kbd>open</span>
+            <span><kbd>n</kbd>ping</span><span><kbd>v</kbd>reviewers</span>
+            <span><kbd>z</kbd>snooze</span><span><kbd>:</kbd>command</span>
+            <span><kbd>/</kbd>filter</span><span><kbd>?</kbd>help</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- 08 — Rex + Claude Code -->
+<section class="unit" id="u8" data-name-fr="rex + claude" data-name-en="rex + claude">
+  <div class="wrap">
+    <div class="unit-head">
+      <div class="eyebrow"><span class="num">08</span><span data-l="fr">en option : dans Rex</span><span data-l="en">optional: inside Rex</span></div>
+      <h2><span data-l="fr">Un onglet par MR.<span class="dim">Avec sa session Claude Code.</span></span><span data-l="en">One tab per MR.<span class="dim">With its Claude Code session.</span></span></h2>
+      <p class="lead muted"><span data-l="fr">Dans le multiplexeur <a href="https://rex.dev">Rex</a>, <b>w</b> vous amène à l'onglet où la MR est travaillée, ou le crée : worktree de la branche, et une session Claude Code reprise ou lancée avec le contexte de la MR. flw remplit aussi le panneau Activity, et un clic sur une ligne ouvre l'onglet de sa MR.</span><span data-l="en">In the <a href="https://rex.dev">Rex</a> multiplexer, <b>w</b> takes you to the tab where the MR is worked on, or opens one: the branch's worktree, and a Claude Code session resumed or started with the MR's context. flw also fills the Activity panel, and clicking a line opens its MR's tab.</span></p>
+    </div>
+    <div class="rexgrid">
+      <div class="term">
+        <div class="term-top"><i></i><i></i><i></i><span>Rex · Activity</span><div class="ctl"><div class="seg" role="group" aria-label="poll"><button type="button" id="actBefore" aria-pressed="true"><span data-l="fr">1er relevé</span><span data-l="en">1st poll</span></button><button type="button" id="actAfter" aria-pressed="false"><span data-l="fr">15 s après</span><span data-l="en">15 s later</span></button></div></div></div>
+        <div class="activity" id="activity"></div>
+      </div>
+      <div>
+        <div class="toasts" id="toasts"></div>
+        <p class="note"><span data-l="fr">Les vraies lignes (protocole OSC 7501) et notifications (OSC 777) qu'a émises flw dans Rex, entre deux relevés de la démo : un commentaire, une approbation, un pipeline terminé.</span><span data-l="en">The actual records (OSC 7501 protocol) and notifications (OSC 777) flw sent to Rex between two polls of the demo: a comment, an approval, a finished pipeline.</span></p>
+        <ul class="checks" style="margin-top:16px">
+          <li><span data-l="fr"><b>X</b> nettoie une MR mergée : onglet, worktree, branche locale si rien ne se perd.</span><span data-l="en"><b>X</b> cleans up a merged MR: its tab, worktree, and local branch when nothing would be lost.</span></li>
+          <li><span data-l="fr">Une MR reportée sort d'Activity jusqu'à son rappel.</span><span data-l="en">A snoozed MR leaves Activity until its reminder.</span></li>
+        </ul>
+      </div>
+    </div>
+    <div class="clear">
+      <div class="big" id="clearMsg"></div>
+      <div class="btns">
+        <a class="btn primary" href="https://github.com/jgsqware/flw">★ GitHub</a>
+        <a class="btn" href="#u7"><span data-l="fr">Démarrer</span><span data-l="en">Get started</span></a>
+        <a class="btn" href="https://github.com/jgsqware/flw#readme"><span data-l="fr">Lire le README</span><span data-l="en">Read the README</span></a>
+      </div>
+    </div>
+  </div>
+</section>
+</main>
+
+<footer>
+  <div class="wrap">
+    <div class="grid">
+      <div><a class="brand" href="#u1"><span class="led" aria-hidden="true"></span>flw</a><p class="muted" style="margin-top:12px"><span data-l="fr">Qui doit agir sur vos merge requests, et quand relancer.</span><span data-l="en">Who must act on your merge requests, and when to ping.</span></p></div>
+      <div><h4><span data-l="fr">Projet</span><span data-l="en">Project</span></h4><ul>
+        <li><a href="https://github.com/jgsqware/flw">GitHub</a></li>
+        <li><a href="https://github.com/jgsqware/flw/blob/main/LICENSE"><span data-l="fr">Licence MIT</span><span data-l="en">MIT license</span></a></li>
+        <li><a href="https://gitlab.com/gitlab-org/cli">glab</a></li>
+      </ul></div>
+      <div><h4>Docs</h4><ul>
+        <li><a href="#u7"><span data-l="fr">Démarrage rapide</span><span data-l="en">Quick start</span></a></li>
+        <li><a href="https://github.com/jgsqware/flw#readme">README</a></li>
+        <li><a href="#u3"><span data-l="fr">Les règles NEXT</span><span data-l="en">The NEXT rules</span></a></li>
+      </ul></div>
+      <div><h4><span data-l="fr">Voir</span><span data-l="en">See</span></h4><ul>
+        <li><a href="#u4"><span data-l="fr">Les cinq écrans</span><span data-l="en">The five screens</span></a></li>
+        <li><a href="#u8">Rex + Claude Code</a></li>
+        <li><a href="#u6"><span data-l="fr">Les limites</span><span data-l="en">The limits</span></a></li>
+      </ul></div>
+    </div>
+    <div class="fine"><span>open source · MIT · Go</span><span><span data-l="fr">Démo : entreprise fictive « acme », utilisateurs alex, sam, kim et noor ; vrais écrans de flw sur un faux glab.</span><span data-l="en">Demo: fictional company "acme", users alex, sam, kim and noor; real flw screens on a fake glab.</span></span></div>
+  </div>
+</footer>
+
+<div class="hud" role="navigation" aria-label="Units">
+  <div class="wrap">
+    <div class="leds" id="leds"></div>
+    <div class="unitname"><span data-l="fr">unité</span><span data-l="en">unit</span> <b id="unitNum">01</b> / 08 <span id="unitName"></span></div>
+    <div class="count" id="unitCount"></div>
+    <div class="keys"><kbd>j</kbd><kbd>k</kbd> · <kbd>1</kbd>–<kbd>8</kbd> · <kbd>t</kbd> <span data-l="fr">thème</span><span data-l="en">theme</span> · <kbd>l</kbd> <span data-l="fr">langue</span><span data-l="en">language</span></div>
+    <div class="run" id="hudRun"></div>
+  </div>
+</div>
+
+<script src="assets/flw-data.js"></script>
+<script>
+(function () {
+  'use strict';
+  var D = window.FLW_DATA || {};
+  var root = document.documentElement;
+  var reduce = window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches;
+  function lang() { return root.dataset.lang === 'fr' ? 'fr' : 'en'; }
+  function fr() { return lang() === 'fr'; }
+  function store(k, v) { try { localStorage.setItem(k, v); } catch (e) {} }
+  function esc(s) { return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); }
+
+  // ---------- ANSI frames ----------
+  function lineHTML(runs) {
+    var h = '';
+    for (var i = 0; i < runs.length; i++) h += runs[i][0] ? '<span class="' + runs[i][0] + '">' + esc(runs[i][1]) + '</span>' : esc(runs[i][1]);
+    return h;
+  }
+  function frameHTML(set, i) { return set.frames[i].map(function (li) { return lineHTML(set.pool[li]); }).join('\n'); }
+  // font size so that the screen's columns fit the width
+  var fitObs = new ResizeObserver(function (es) { es.forEach(function (e) { var p = e.target.querySelector('pre[data-fit]'); if (p) fit(p); }); });
+  function fit(pre) {
+    var cols = +(pre.getAttribute('data-fit') || 100) || 100;
+    var w = pre.parentElement.clientWidth - 28;
+    if (w <= 0) return;
+    // never below 8.5px: on a phone the screen scrolls sideways inside its frame instead
+    var max = +(pre.getAttribute('data-max') || 13);
+    var fs = Math.max(8.5, Math.min(max, w / (cols * 0.602)));
+    pre.style.fontSize = fs.toFixed(2) + 'px';
+  }
+  document.querySelectorAll('pre[data-fit]').forEach(function (p) { fitObs.observe(p.parentElement); fit(p); });
+
+  // ---------- players ----------
+  function Player(el, kind, opts) { this.el = el; this.kind = kind; this.i = 0; this.playing = !reduce; this.timer = null; this.opts = opts || {}; }
+  Player.prototype.set = function () { return D[this.kind]; };
+  Player.prototype.draw = function () {
+    var s = this.set(); if (!s) return;
+    if (this.i >= s.frames.length) this.i = s.frames.length - 1;
+    this.el.innerHTML = frameHTML(s, this.i);
+  };
+  Player.prototype.tick = function () {
+    var self = this, s = this.set(); clearTimeout(this.timer);
+    if (!s || !this.playing) return;
+    var last = this.i >= s.frames.length - 1;
+    this.timer = setTimeout(function () { self.i = last ? 0 : self.i + 1; self.draw(); self.tick(); }, last ? 2600 : (this.opts.step || 180));
+  };
+  Player.prototype.start = function () { this.draw(); this.tick(); this.btn(); };
+  Player.prototype.restart = function () { this.i = 0; this.playing = true; this.draw(); this.tick(); this.btn(); };
+  Player.prototype.toggle = function () { this.playing = !this.playing; this.tick(); this.btn(); };
+  Player.prototype.pause = function () { this.playing = false; clearTimeout(this.timer); this.btn(); };
+  Player.prototype.btn = function () {
+    var b = document.querySelector('[data-player="' + this.opts.name + '"][data-act="toggle"]');
+    if (b) b.textContent = this.playing ? 'Ⅱ' : '▶';
+  };
+  var players = {};
+  ['hero', 'dash', 'detail', 'act', 'pipe', 'diff'].forEach(function (k) {
+    players[k] = new Player(document.getElementById(k + 'Screen'), k, { name: k, step: k === 'detail' ? 160 : 180 });
+  });
+  document.querySelectorAll('[data-player]').forEach(function (b) {
+    b.addEventListener('click', function () { var p = players[b.dataset.player]; if (b.dataset.act === 'restart') p.restart(); else p.toggle(); });
+  });
+  // tab players: show the first frame, play only the open tab
+  ['dash', 'detail', 'act', 'pipe', 'diff'].forEach(function (k) { players[k].playing = false; players[k].draw(); players[k].btn(); });
+
+  // ---------- config.yaml, annotated ----------
+  var NOTES = [
+    [/^reviewers:/, ['proposés par v, ajoutés par V', 'suggested by v, added by V']],
+    [/^\s+projects:/, ['par projet ou groupe', 'per project or group']],
+    [/^ping:/, ['attente avant « ping »', 'wait before "ping"']],
+    [/^reping:/, ['puis « re-ping »', 'then "re-ping"']],
+    [/^snooze_at:/, ['heure de réveil de z', 'when z wakes up']],
+    [/^notify:/, ['popups + Rex Activity', 'popups + Rex Activity']],
+    [/^\s+events:/, ['ce qui est signalé', 'what gets notified']]
+  ];
+  function hlYaml(l) {
+    if (/^\s*#/.test(l)) return '<span class="c">' + esc(l) + '</span>';
+    var m = l.match(/^(\s*)([\w_]+)(:)(.*)$/);
+    if (m) return esc(m[1]) + '<span class="k">' + esc(m[2]) + '</span>' + m[3] + '<span class="s">' + esc(m[4]) + '</span>';
+    return esc(l);
+  }
+  function drawYaml() {
+    var li = fr() ? 0 : 1, seen = {};
+    var text = (D.config || '').replace(/\n$/, '');
+    document.getElementById('fileYaml').innerHTML = text.split('\n').map(function (l, i) {
+      var tag = '';
+      NOTES.forEach(function (n, k) { if (!seen[k] && n[0].test(l)) { seen[k] = 1; tag = n[1][li]; } });
+      return '<div class="ln' + (tag ? ' mark' : '') + '"><b>' + (i + 1) + '</b><span>' + hlYaml(l) + '</span>' + (tag ? '<span class="tag">' + esc(tag) + '</span>' : '<span></span>') + '</div>';
+    }).join('');
+  }
+
+  // ---------- Rex Activity + notifications (real records) ----------
+  var actView = 'before';
+  function drawActivity() {
+    var R = D.rex; var box = document.getElementById('activity');
+    if (!R) { box.innerHTML = '<div class="row"><span></span><span class="msg">—</span></div>'; return; }
+    var before = {}; R.before.forEach(function (r) { before[r.id || ''] = r.msg; });
+    box.innerHTML = R[actView].map(function (r) {
+      var isNew = actView === 'after' && before[r.id || ''] !== r.msg;
+      return '<div class="row ' + esc(r.state) + (r.id ? '' : ' root') + (isNew ? ' new' : '') + '"><span class="dot"></span><div><div class="ttl">' + esc(r.title || '') + '</div><div class="msg">' + esc(r.msg || '') + '</div></div></div>';
+    }).join('');
+    document.getElementById('actBefore').setAttribute('aria-pressed', actView === 'before');
+    document.getElementById('actAfter').setAttribute('aria-pressed', actView === 'after');
+  }
+  document.getElementById('actBefore').addEventListener('click', function () { actView = 'before'; drawActivity(); });
+  document.getElementById('actAfter').addEventListener('click', function () { actView = 'after'; drawActivity(); showToasts(); });
+  var toastTimers = [];
+  function showToasts() {
+    var R = D.rex, box = document.getElementById('toasts');
+    toastTimers.forEach(clearTimeout); toastTimers = [];
+    if (!R) return;
+    box.innerHTML = R.notifications.map(function (n) {
+      return '<div class="toast"><div class="ico">▶</div><div><b>' + esc(n.title) + '</b><span>' + esc(n.body) + '</span></div></div>';
+    }).join('');
+    box.querySelectorAll('.toast').forEach(function (t, i) {
+      if (reduce) { t.classList.add('on'); return; }
+      toastTimers.push(setTimeout(function () { t.classList.add('on'); }, 250 + i * 450));
+    });
+  }
+  // the "15 s later" view plays once when the unit comes into view
+  new IntersectionObserver(function (es, o) {
+    es.forEach(function (e) { if (e.isIntersecting) { setTimeout(function () { actView = 'after'; drawActivity(); showToasts(); }, reduce ? 0 : 1600); o.disconnect(); } });
+  }, { threshold: .4 }).observe(document.getElementById('activity'));
+
+  // ---------- tabs ----------
+  var tabs = document.querySelectorAll('[role="tab"]');
+  function selectTab(t) {
+    tabs.forEach(function (b) { var on = b === t; b.setAttribute('aria-selected', on); document.getElementById(b.getAttribute('aria-controls')).hidden = !on; });
+    Object.keys(players).forEach(function (k) {
+      if (k === 'hero') return;
+      if ('t-' + k === t.id) players[k].restart(); else players[k].pause();
+    });
+    document.querySelectorAll('.tabpanel:not([hidden]) pre[data-fit]').forEach(fit);
+  }
+  tabs.forEach(function (b, i) {
+    b.addEventListener('click', function () { selectTab(b); });
+    b.addEventListener('keydown', function (e) {
+      if (e.key === 'ArrowRight' || e.key === 'ArrowLeft') { var n = tabs[(i + (e.key === 'ArrowRight' ? 1 : tabs.length - 1)) % tabs.length]; n.focus(); selectTab(n); e.preventDefault(); e.stopPropagation(); }
+    });
+  });
+  // start the open tab's player when the unit comes into view
+  new IntersectionObserver(function (es, o) {
+    es.forEach(function (e) { if (e.isIntersecting) { var t = document.querySelector('[role="tab"][aria-selected="true"]'); if (t && !reduce) selectTab(t); o.disconnect(); } });
+  }, { threshold: .3 }).observe(document.getElementById('u4'));
+
+  // ---------- steps ----------
+  var pipe = document.getElementById('pipe'), pipeTimers = [];
+  function runPipe() {
+    pipeTimers.forEach(clearTimeout); pipeTimers = [];
+    var lis = pipe.querySelectorAll('li');
+    lis.forEach(function (li) { li.classList.toggle('lit', reduce); });
+    if (reduce) return;
+    lis.forEach(function (li, i) { pipeTimers.push(setTimeout(function () { li.classList.add('lit'); }, 300 + i * 420)); });
+  }
+  document.getElementById('pipeReplay').addEventListener('click', runPipe);
+  new IntersectionObserver(function (es, o) { es.forEach(function (e) { if (e.isIntersecting) { runPipe(); o.disconnect(); } }); }, { threshold: .5 }).observe(pipe);
+
+  // ---------- HUD: units ----------
+  var units = Array.prototype.slice.call(document.querySelectorAll('section.unit'));
+  var leds = document.getElementById('leds'), seen = {}, cur = 0;
+  units.forEach(function (u, i) {
+    var b = document.createElement('button'); b.type = 'button'; b.setAttribute('aria-label', 'Unit ' + (i + 1));
+    b.addEventListener('click', function () { go(i); }); leds.appendChild(b);
+  });
+  function go(i) { i = Math.max(0, Math.min(units.length - 1, i)); units[i].scrollIntoView({ behavior: reduce ? 'auto' : 'smooth' }); }
+  function drawHud() {
+    leds.querySelectorAll('button').forEach(function (b, i) { b.className = (i === cur ? 'cur' : '') + (seen[i] && i !== cur ? ' seen' : ''); });
+    document.getElementById('unitNum').textContent = ('0' + (cur + 1)).slice(-2);
+    document.getElementById('unitName').textContent = '· ' + units[cur].dataset[fr() ? 'nameFr' : 'nameEn'];
+    var n = Object.keys(seen).length;
+    document.getElementById('unitCount').textContent = n + ' / 8 ' + (fr() ? 'vertes' : 'green');
+    document.getElementById('clearMsg').innerHTML = n >= 8
+      ? (fr() ? 'Toutes les unités <span class="acc">sont vertes.</span>' : 'All units <span class="acc">are green.</span>')
+      : (fr() ? n + ' / 8 unités <span class="acc">vertes.</span>' : n + ' / 8 units <span class="acc">green.</span>');
+    var R = D.rex, root0 = R && R.before.filter(function (r) { return !r.id; })[0];
+    if (root0) {
+      var m = root0.msg.match(/▶ (\d+) on you · ⏳ (\d+) to ping/);
+      if (m) document.getElementById('hudRun').innerHTML = (fr() ? 'démo' : 'demo') + '<span class="st">▶ ' + m[1] + (fr() ? ' à toi' : ' on you') + '</span><span class="st idle">⏳ ' + m[2] + (fr() ? ' à relancer' : ' to ping') + '</span>';
+    }
+  }
+  var vis = {};
+  var uo = new IntersectionObserver(function (es) {
+    es.forEach(function (e) { vis[units.indexOf(e.target)] = e.intersectionRatio; if (e.intersectionRatio > .35) seen[units.indexOf(e.target)] = 1; });
+    var best = 0, br = -1; for (var k in vis) if (vis[k] > br) { br = vis[k]; best = +k; }
+    cur = best; drawHud();
+  }, { threshold: [0, .2, .35, .5, .75, 1] });
+  units.forEach(function (u) { uo.observe(u); });
+
+  // ---------- language, theme, keyboard ----------
+  function render() { drawYaml(); drawActivity(); drawHud(); }
+  document.getElementById('langBtn').addEventListener('click', toggleLang);
+  function toggleLang() { var l = fr() ? 'en' : 'fr'; root.dataset.lang = l; root.lang = l; store('flw.lang', l); render(); }
+  document.getElementById('themeBtn').addEventListener('click', toggleTheme);
+  function toggleTheme() {
+    var dark = root.dataset.theme ? root.dataset.theme === 'dark' : matchMedia('(prefers-color-scheme: dark)').matches;
+    root.dataset.theme = dark ? 'light' : 'dark'; store('flw.theme', root.dataset.theme);
+  }
+  document.addEventListener('keydown', function (e) {
+    if (e.metaKey || e.ctrlKey || e.altKey) return;
+    var tag = (e.target.tagName || '').toLowerCase(); if (tag === 'input' || tag === 'textarea') return;
+    if (e.key === 'j') go(cur + 1); else if (e.key === 'k') go(cur - 1);
+    else if (/^[1-8]$/.test(e.key)) go(+e.key - 1);
+    else if (e.key === 't') toggleTheme(); else if (e.key === 'l') toggleLang();
+  });
+
+  // ---------- copy ----------
+  document.querySelectorAll('[data-copy]').forEach(function (b) {
+    b.addEventListener('click', function () {
+      var t = b.getAttribute('data-copy');
+      var ok = function () { var old = b.textContent; b.textContent = fr() ? 'copié' : 'copied'; b.classList.add('done'); setTimeout(function () { b.textContent = old; b.classList.remove('done'); }, 1200); };
+      if (navigator.clipboard) navigator.clipboard.writeText(t).then(ok, function () {});
+    });
+  });
+
+  render();
+  players.hero.start();
+})();
+</script>
+</body>
+</html>
