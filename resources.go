@@ -312,11 +312,15 @@ func mrActions() []KeyAction {
 		}},
 		{Keys: []string{"a"}, Help: "approve", Short: true, Fn: func(a *App, r *Row) tea.Cmd {
 			m := mrOf(r)
-			return a.run("approving !"+m.IID, "approved !"+m.IID, func() error { return a.gl.Approve(m.Path(), m.IID) })
+			return a.confirm(fmt.Sprintf("Approve !%s %q?", m.IID, m.Title), func() tea.Cmd {
+				return a.run("approving !"+m.IID, "approved !"+m.IID, func() error { return a.gl.Approve(m.Path(), m.IID) })
+			})
 		}},
 		{Keys: []string{"A"}, Help: "revoke my approval", Fn: func(a *App, r *Row) tea.Cmd {
 			m := mrOf(r)
-			return a.run("revoking approval on !"+m.IID, "approval revoked on !"+m.IID, func() error { return a.gl.Unapprove(m.Path(), m.IID) })
+			return a.confirm(fmt.Sprintf("Revoke your approval on !%s?", m.IID), func() tea.Cmd {
+				return a.run("revoking approval on !"+m.IID, "approval revoked on !"+m.IID, func() error { return a.gl.Unapprove(m.Path(), m.IID) })
+			})
 		}},
 		{Keys: []string{"m"}, Help: "merge now", Hint: "merge", Short: true, Fn: func(a *App, r *Row) tea.Cmd {
 			m := mrOf(r)
@@ -332,7 +336,9 @@ func mrActions() []KeyAction {
 		}},
 		{Keys: []string{"r"}, Help: "rebase on target branch", Fn: func(a *App, r *Row) tea.Cmd {
 			m := mrOf(r)
-			return a.run("rebasing !"+m.IID, "rebase requested on !"+m.IID, func() error { return a.gl.Rebase(m.Path(), m.IID) })
+			return a.confirm(fmt.Sprintf("Rebase !%s %s on %s?", m.IID, m.SourceBranch, m.TargetBranch), func() tea.Cmd {
+				return a.run("rebasing !"+m.IID, "rebase requested on !"+m.IID, func() error { return a.gl.Rebase(m.Path(), m.IID) })
+			})
 		}},
 		{Keys: []string{"n"}, Help: "nudge: ping the people this MR waits on (prefilled comment)", Hint: "ping", Short: true, Fn: func(a *App, r *Row) tea.Cmd {
 			m := mrOf(r)
@@ -362,7 +368,13 @@ func mrActions() []KeyAction {
 			if to {
 				label = "marked draft"
 			}
-			return a.run("updating !"+m.IID, "!"+m.IID+" "+label, func() error { return a.gl.SetDraft(m.Path(), m.IID, m.Title, to) })
+			q := fmt.Sprintf("Mark !%s ready for review?", m.IID)
+			if to {
+				q = fmt.Sprintf("Mark !%s as draft?", m.IID)
+			}
+			return a.confirm(q, func() tea.Cmd {
+				return a.run("updating !"+m.IID, "!"+m.IID+" "+label, func() error { return a.gl.SetDraft(m.Path(), m.IID, m.Title, to) })
+			})
 		}},
 		{Keys: []string{"x"}, Help: "close / reopen", Fn: func(a *App, r *Row) tea.Cmd {
 			m := mrOf(r)
@@ -952,7 +964,9 @@ func newPipelinesView(a *App, project, ref string, mr *MR) *ListView {
 	l.actions = []KeyAction{
 		{Keys: []string{"r"}, Help: "retry failed jobs", Hint: "retry", Short: true, Fn: func(a *App, r *Row) tea.Cmd {
 			p := plOf(r)
-			return a.run("retrying pipeline #"+p.IID, "pipeline #"+p.IID+" retried", func() error { return gl.PipelineAction(p.Project, p.Num(), "retry") })
+			return a.confirm("Retry the failed jobs of pipeline #"+p.IID+"?", func() tea.Cmd {
+				return a.run("retrying pipeline #"+p.IID, "pipeline #"+p.IID+" retried", func() error { return gl.PipelineAction(p.Project, p.Num(), "retry") })
+			})
 		}},
 		{Keys: []string{"x"}, Help: "cancel", Short: true, Fn: func(a *App, r *Row) tea.Cmd {
 			p := plOf(r)
@@ -1064,7 +1078,9 @@ func newJobsView(a *App, project, pipelineIID string) *ListView {
 		{Keys: []string{"l"}, Help: "logs", Short: true, Fn: openLog},
 		{Keys: []string{"r"}, Help: "retry job", Short: true, Fn: func(a *App, r *Row) tea.Cmd {
 			j := jobOf(r)
-			return a.run("retrying "+j.Name, j.Name+" retried", func() error { return gl.JobAction(project, j.Num(), "retry") })
+			return a.confirm("Retry "+j.Name+"?", func() tea.Cmd {
+				return a.run("retrying "+j.Name, j.Name+" retried", func() error { return gl.JobAction(project, j.Num(), "retry") })
+			})
 		}},
 		{Keys: []string{"p"}, Help: "play manual job", Short: true, Fn: func(a *App, r *Row) tea.Cmd {
 			j := jobOf(r)
@@ -1082,7 +1098,9 @@ func newJobsView(a *App, project, pipelineIID string) *ListView {
 			})
 		}},
 		{Keys: []string{"R"}, Help: "retry all failed jobs of the pipeline", Fn: func(a *App, r *Row) tea.Cmd {
-			return a.run("retrying pipeline", "pipeline retried", func() error { return retryPipelineByIID(gl, project, pipelineIID) })
+			return a.confirm("Retry the failed jobs of pipeline #"+pipelineIID+"?", func() tea.Cmd {
+				return a.run("retrying pipeline", "pipeline retried", func() error { return retryPipelineByIID(gl, project, pipelineIID) })
+			})
 		}},
 		{Keys: []string{"o"}, Help: "open in browser", Hint: "browser", Short: true, Fn: func(a *App, r *Row) tea.Cmd { return openCmd(a, jobOf(r).WebURL) }},
 		{Keys: []string{"y"}, Help: "copy URL", Fn: func(a *App, r *Row) tea.Cmd { return copyCmd(a, jobOf(r).WebURL) }},
@@ -1168,7 +1186,9 @@ func newLogView(a *App, j Job) *PagerView {
 	}
 	p.acts = []KeyAction{
 		{Keys: []string{"r"}, Help: "retry job", Short: true, Fn: func(a *App, r *Row) tea.Cmd {
-			return a.run("retrying "+j.Name, j.Name+" retried (see the jobs list)", func() error { return gl.JobAction(j.Project, j.Num(), "retry") })
+			return a.confirm("Retry "+j.Name+"?", func() tea.Cmd {
+				return a.run("retrying "+j.Name, j.Name+" retried (see the jobs list)", func() error { return gl.JobAction(j.Project, j.Num(), "retry") })
+			})
 		}},
 		{Keys: []string{"x"}, Help: "cancel job", Fn: func(a *App, r *Row) tea.Cmd {
 			return a.confirm("Cancel "+j.Name+"?", func() tea.Cmd {
