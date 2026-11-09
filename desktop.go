@@ -513,6 +513,13 @@ func (a *App) renderDock() string {
 	if l, ok := a.top().(*ListView); ok && !l.stale.IsZero() {
 		right = append(right, sGray.Render("⟳ "+ago(l.stale)))
 	}
+	host := strings.TrimPrefix(strings.TrimPrefix(a.gl.BaseURL, "https://"), "http://")
+	if host == "" {
+		host = a.gl.Host
+	}
+	if host != "" {
+		right = append(right, sGray.Render("⛁ ")+lipgloss.NewStyle().Foreground(cBlue).Render(host))
+	}
 	if a.gl.Me != "" {
 		right = append(right, sAccent.Render("@"+a.gl.Me))
 	}
