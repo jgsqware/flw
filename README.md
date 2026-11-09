@@ -34,7 +34,8 @@ with rounded borders and ● ● ●, an attention sidebar, and floating windows
 - **Tiles**: the MR list is the master window; the selected MR's detail and its pipeline jobs
   follow the cursor on the right. `tab` moves the focus between windows, keys go to the focused one.
 - **`f`** zooms the focused window (the list, or opens the detail / jobs full size); `esc` comes back.
-- **`alt+1`…`alt+9`** switch workspace; each keeps its own views.
+- **`1`…`9`** (or `alt+1`…`9`, AZERTY too) switch workspace; each keeps its own views.
+- **Mouse**: click a window to focus it, a row to select it (double-click opens), a dock pill or a sidebar line to switch; the wheel scrolls what is under the pointer. Hold shift (or option on macOS) to select text.
 - **`ctrl+p`** opens the palette: workspaces, every MR of the dashboard, commands.
 - **`space`** shows the keys of the focused window.
 

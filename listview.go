@@ -74,6 +74,7 @@ type ListView struct {
 	height   int
 	pred     func(Row) bool // extra row filter (focus mode)
 	predName string
+	focusIdx int
 	// keys that also work when no row is selected (e.g. cycle state on an empty list)
 	onEmptyKey map[string]func(a *App) tea.Cmd
 }

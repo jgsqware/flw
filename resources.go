@@ -167,21 +167,23 @@ var focusModes = []struct {
 }
 
 // addFocus wires the "t" key that narrows an MR list to what needs me / what needs a ping.
-func addFocus(l *ListView) {
-	focus := 0
-	cycle := func(a *App) tea.Cmd {
-		focus = (focus + 1) % len(focusModes)
-		f := focusModes[focus]
-		l.predName = ""
-		l.pred = nil
-		if f.keep != nil {
-			l.predName = f.name
-			l.pred = func(r Row) bool { return f.keep(mrOf(&r).Turn) }
-		}
-		l.applyFilter()
-		l.cursor, l.offset = 0, 0
-		return a.flashOK("showing: " + f.name)
+// setFocusMode narrows an MR list to one of focusModes (0 = all).
+func setFocusMode(a *App, l *ListView, i int) tea.Cmd {
+	l.focusIdx = i % len(focusModes)
+	f := focusModes[l.focusIdx]
+	l.predName = ""
+	l.pred = nil
+	if f.keep != nil {
+		l.predName = f.name
+		l.pred = func(r Row) bool { return f.keep(mrOf(&r).Turn) }
 	}
+	l.applyFilter()
+	l.cursor, l.offset = 0, 0
+	return a.flashOK("showing: " + f.name)
+}
+
+func addFocus(l *ListView) {
+	cycle := func(a *App) tea.Cmd { return setFocusMode(a, l, l.focusIdx+1) }
 	l.actions = append([]KeyAction{{Keys: []string{"t"}, Help: "focus: all / on me / to ping / waiting on others / to clean up / snoozed", Hint: "focus", Short: true,
 		Fn: func(a *App, r *Row) tea.Cmd { return cycle(a) }}}, l.actions...)
 	if l.onEmptyKey == nil {

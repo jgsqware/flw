@@ -82,7 +82,13 @@ type App struct {
 	spin spinner.Model
 	busy int
 
-	desk deskState
+	desk      deskState
+	layout    layoutMap
+	lastClick struct {
+		row  int
+		view View
+		at   time.Time
+	}
 }
 
 func newApp(gl *Client, project string) *App {
@@ -316,6 +322,9 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.KeyMsg:
 		cmd := a.handleKey(msg)
 		return a, tea.Batch(cmd, a.syncPreview())
+
+	case tea.MouseMsg:
+		return a, a.handleMouse(msg)
 	}
 
 	// forward other messages (e.g. textinput blink) to inputs
@@ -772,6 +781,7 @@ func (a *App) onNotify(mrs, done []*MR) tea.Cmd {
 }
 
 func (a *App) viewDesktop() string {
+	a.layout.reset()
 	dock := a.renderDock()
 	hints := a.renderDeskFooter()
 	_, status := a.footerLines()

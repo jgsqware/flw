@@ -55,7 +55,11 @@ func main() {
 		os.Exit(1)
 	}
 	app := newApp(&Client{Host: *host}, *repo)
-	p := tea.NewProgram(app, tea.WithAltScreen())
+	opts := []tea.ProgramOption{tea.WithAltScreen()}
+	if desktopUI {
+		opts = append(opts, tea.WithMouseCellMotion())
+	}
+	p := tea.NewProgram(app, opts...)
 	_, err := p.Run()
 	if cfg.Notify.activityOn() {
 		for tty, seq := range app.act.clearAll() {

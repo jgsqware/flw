@@ -246,9 +246,8 @@ func (a *App) scanRexCmd() tea.Cmd {
 // deskKey handles the desktop keys; ok=false lets the normal handling go on.
 func (a *App) deskKey(k tea.KeyMsg) (bool, tea.Cmd) {
 	s := k.String()
-	if strings.HasPrefix(s, "alt+") && len(s) == 5 && s[4] >= '1' && s[4] <= '9' {
-		ws := a.workspaces()
-		if i := int(s[4] - '1'); i < len(ws) {
+	if i, ok := wsKeys[s]; ok {
+		if ws := a.workspaces(); i < len(ws) {
 			return true, a.switchWS(ws[i])
 		}
 		return true, nil
@@ -497,6 +496,15 @@ func (a *App) renderDock() string {
 			pills = append(pills, sGray.Render(txt))
 		}
 	}
+	x := ansi.StringWidth(logo) + 1
+	for i, ws := range a.workspaces() {
+		if i >= len(pills) {
+			break
+		}
+		pw, ws := ansi.StringWidth(pills[i]), ws
+		a.layout.addSpot(rect{x, 0, pw, 1}, func(a *App) tea.Cmd { return a.switchWS(ws) })
+		x += pw + 1
+	}
 	left := logo + " " + strings.Join(pills, sDim.Render("│"))
 	var right []string
 	if a.busy > 0 || (a.top() != nil && isLoading(a.top())) {
@@ -529,8 +537,11 @@ func (a *App) renderDock() string {
 	return fit(line, a.w) + "\n" + fit(rule, a.w)
 }
 
-func (a *App) renderSidebar(w, h int) string {
+func (a *App) renderSidebar(x0, y0, w, h int) string {
 	var b []string
+	click := func(fn func(a *App) tea.Cmd) {
+		a.layout.addSpot(rect{x0, y0 + len(b) - 1, w, 1}, fn)
+	}
 	head := func(s string) {
 		if len(b) > 0 {
 			b = append(b, "", sDim.Render(strings.Repeat(" ", max(w-6, 0))+"───"))
@@ -553,10 +564,32 @@ func (a *App) renderSidebar(w, h int) string {
 		pred = l.predName
 	}
 	head("attention")
+	focusOn := func(name string) func(a *App) tea.Cmd {
+		return func(a *App) tea.Cmd {
+			l, ok := a.stack[0].(*ListView)
+			if !ok {
+				return nil
+			}
+			for i, f := range focusModes {
+				if f.name == name {
+					if l.predName == name {
+						i = 0 // clicking the active one shows everything again
+					}
+					a.desk.focus = focMaster
+					return tea.Batch(setFocusMode(a, l, i), a.syncPreview())
+				}
+			}
+			return nil
+		}
+	}
 	row(pred == "on me", "▶ on you", fmt.Sprint(mine), cOrange)
+	click(focusOn("on me"))
 	row(pred == "to ping", "⏳ to ping", fmt.Sprint(ping), cYellow)
+	click(focusOn("to ping"))
 	row(pred == "snoozed", "💤 snoozed", fmt.Sprint(zz), cGray)
+	click(focusOn("snoozed"))
 	row(pred == "to clean up", "🧹 to clean up", fmt.Sprint(clean), cAccent2)
+	click(focusOn("to clean up"))
 	head("workspaces")
 	for i, ws := range a.workspaces() {
 		n := 0
@@ -566,6 +599,8 @@ func (a *App) renderSidebar(w, h int) string {
 			}
 		}
 		row(ws == a.desk.cur, fmt.Sprintf("%d %s", i+1, wsLabel(ws)), fmt.Sprint(n), cFg)
+		ws := ws
+		click(func(a *App) tea.Cmd { return a.switchWS(ws) })
 	}
 	if inRex() {
 		head("rex tabs")
@@ -602,7 +637,9 @@ func (a *App) renderDesktop(bodyH int) string {
 		return ""
 	}
 	w := a.w
+	const y0 = 2 // under the dock
 	if !a.tiled() {
+		a.layout.addView(a.top(), rect{0, y0, w, bodyH}, -1)
 		return renderWin(a, a.top(), w, bodyH, true)
 	}
 	sw := 0
@@ -613,6 +650,13 @@ func (a *App) renderDesktop(bodyH int) string {
 	mw := rest * 52 / 100
 	pw := rest - mw
 	ph := bodyH * 58 / 100
+	a.layout.addView(a.stack[0], rect{0, y0, mw, bodyH}, focMaster)
+	if a.desk.preview != nil {
+		a.layout.addView(a.desk.preview, rect{mw, y0, pw, ph}, focPreview)
+	}
+	if a.desk.pipe != nil {
+		a.layout.addView(a.desk.pipe, rect{mw, y0 + ph, pw, bodyH - ph}, focPipe)
+	}
 	master := renderWin(a, a.stack[0], mw, bodyH, a.desk.focus == focMaster)
 	var prev, pipe string
 	if a.desk.preview != nil {
@@ -627,7 +671,7 @@ func (a *App) renderDesktop(bodyH int) string {
 	}
 	cols := []string{master, prev + "\n" + pipe}
 	if sw > 0 {
-		cols = append(cols, a.renderSidebar(sw, bodyH))
+		cols = append(cols, a.renderSidebar(rest, y0, sw, bodyH))
 	}
 	return hjoin(cols...)
 }
@@ -716,7 +760,7 @@ func (a *App) renderWhichKey(bodyH int) string {
 		}
 	}
 	rows = append(rows, [2]string{"tab", "next window"}, [2]string{"f", "zoom / open full"}, [2]string{"ctrl+p", "palette"},
-		[2]string{"alt+1-9", "workspace"}, [2]string{":", "command"}, [2]string{"/", "filter"}, [2]string{"esc", "back"})
+		[2]string{"1-9", "workspace"}, [2]string{":", "command"}, [2]string{"/", "filter"}, [2]string{"esc", "back"})
 	fw := min(110, a.w-6)
 	colW := (fw - 4) / 2
 	var b strings.Builder
@@ -758,6 +802,6 @@ func (a *App) renderDeskFooter() string {
 			}
 		}
 	}
-	hints = append(hints, hint("f", "zoom"), hint("ctrl+p", "palette"), hint("space", "keys"), hint("alt+1-9", "workspace"))
+	hints = append(hints, hint("f", "zoom"), hint("ctrl+p", "palette"), hint("space", "keys"), hint("1-9", "workspace"))
 	return fit(strings.Join(hints, "  "), a.w)
 }
