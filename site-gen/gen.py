@@ -188,7 +188,21 @@ def goto(iid):
     raise SystemExit(f"row !{iid} not found")
 
 
+def write_snooze():
+    """the demo has one MR snoozed until the next business day at 09:00"""
+    import datetime as dt
+    t = dt.datetime.now().astimezone() + dt.timedelta(days=1)
+    while t.weekday() >= 5:
+        t += dt.timedelta(days=1)
+    t = t.replace(hour=9, minute=0, second=0, microsecond=0)
+    d = os.path.join(HERE, "demo-home", "state", "flw")
+    os.makedirs(d, exist_ok=True)
+    with open(os.path.join(d, "snoozes.json"), "w") as f:
+        json.dump({"acme/infra/terraform!233": {"until": t.isoformat(), "title": "Bump the AWS provider to 6.x"}}, f, indent=2)
+
+
 def record():
+    write_snooze()
     data = {}
 
     # hero: dashboard, cursor moves, focus "on me", open an MR, back
