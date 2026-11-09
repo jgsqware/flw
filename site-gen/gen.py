@@ -20,13 +20,13 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 REPO = os.path.dirname(HERE)
 FLW = os.path.join(REPO, "flw")
 OUT = os.path.join(REPO, "site", "assets", "flw-data.js")
-W, H = 136, 24
+W, H = 160, 36
 SESSION = "flwsite"
 
 # flw's Tokyo Night colors -> rack-room terminal classes (see the CSS in index.html)
 FG = {(122, 162, 247): "t", (121, 162, 247): "t", (125, 207, 255): "t", (187, 154, 247): "v",
       (158, 206, 106): "g", (247, 118, 142): "r", (224, 175, 104): "y", (255, 158, 100): "a",
-      (115, 122, 162): "d", (86, 95, 137): "d2", (192, 202, 245): "", (26, 27, 38): "k"}
+      (115, 122, 162): "d", (86, 95, 137): "d2", (59, 66, 97): "d2", (192, 202, 245): "", (26, 27, 38): "k"}
 BG = {(40, 52, 87): "Bs", (255, 158, 100): "Ba", (122, 162, 247): "Bt", (121, 162, 247): "Bt"}
 
 
@@ -178,11 +178,12 @@ class Movie:
 
 
 def goto(iid):
-    """move the cursor to the row of !iid on the dashboard"""
-    keys("g", pause=0.2)
+    """focus the list window and move its cursor to !iid"""
+    keys("Escape", "g", pause=0.3)
     for _ in range(20):
         sel = [l for l in plain().split("\n") if "▌!" in l]
         if sel and f"▌!{iid} " in sel[0]:
+            time.sleep(0.6)  # the preview windows follow the cursor
             return
         keys("j", pause=0.15)
     raise SystemExit(f"row !{iid} not found")
@@ -205,57 +206,70 @@ def record():
     write_snooze()
     data = {}
 
-    # hero: dashboard, cursor moves, focus "on me", open an MR, back
+    # hero: the desktop; the preview follows the cursor, focus moves, a workspace, the palette
     start()
+    time.sleep(0.8)
     m = Movie()
-    m.snap(10)
+    m.snap(12)
     for _ in range(3):
-        keys("j", pause=0.15)
-        m.snap(3)
-    keys("g", pause=0.2)
+        keys("j", pause=0.7)
+        m.snap(5)
+    keys("g", pause=0.7)
+    m.snap(4)
+    keys("Tab")
+    m.snap(5)
+    for _ in range(6):
+        keys("j", pause=0.1)
+        m.snap(2)
+    keys("Tab")
+    m.snap(6)
+    keys("Escape", "3", pause=0.3)
+    wait_for("MergeRequests(acme/platform/api)")
+    time.sleep(0.6)
+    m.snap(12)
+    keys("1", pause=0.3)
+    wait_for("MyMergeRequests")
+    time.sleep(0.5)
+    m.snap(4)
+    keys("C-p", pause=0.3)
+    for ch in "retry":
+        keys(ch, pause=0.12)
+        m.snap(1)
+    m.snap(12)
+    keys("Escape", pause=0.3)
+    keys("Space", pause=0.4)
+    m.snap(14)
+    keys("Escape", pause=0.4)
     m.snap(3)
-    keys("t")
-    m.snap(10)
-    keys("t")
-    m.snap(10)
-    for _ in range(4):
-        keys("t", pause=0.15)
-    wait_for("showing: all")
-    m.snap(4)
-    keys("Enter")
-    wait_for("YOUR TURN")
-    m.snap(16)
-    keys("Escape")
-    wait_for("on you")
-    m.snap(4)
     data["hero"] = m.data()
 
-    # dashboard tab: the focus modes
+    # dashboard tab: the focus modes, mirrored in the sidebar
     m = Movie()
-    keys("g")
+    goto("412")
     m.snap(10)
     for _ in range(5):
-        keys("t")
+        keys("t", pause=0.6)
         m.snap(9)
-    keys("t")
+    keys("t", pause=0.6)
     m.snap(4)
     data["dash"] = m.data()
 
-    # MR tab: detail of !412, scrolled
+    # MR tab: focus the preview, open it full size, scroll
     m = Movie()
     goto("412")
-    keys("Enter")
+    keys("Tab")
+    m.snap(8)
+    keys("f")
     wait_for("YOUR TURN")
-    m.snap(14)
+    m.snap(10)
     for _ in range(14):
         keys("j", pause=0.08)
         m.snap(2)
     m.snap(10)
     keys("Escape")
-    wait_for("on you")
     data["detail"] = m.data()
 
-    # act tab: ping, reviewers, snooze
+    # act tab: ping (floating editor), reviewers, snooze
     m = Movie()
     goto("231")
     m.snap(5)
@@ -277,22 +291,20 @@ def record():
     keys("Escape")
     data["act"] = m.data()
 
-    # pipelines tab: pipelines of !412, jobs, a log
+    # pipelines tab: the jobs window, full size, then a log
     m = Movie()
     goto("412")
-    keys("p")
-    wait_for("Return Retry-After")
-    m.snap(10)
-    keys("Enter")
-    wait_for("golangci-lint")
-    m.snap(10)
+    keys("Tab", "Tab")
+    m.snap(8)
+    keys("f")
+    wait_for("› Jobs")
+    m.snap(8)
     keys("j", "j", pause=0.2)
     m.snap(4)
     keys("l")
     wait_for("TestBucketPerKey")
     m.snap(16)
     keys("Escape", "Escape", "Escape")
-    wait_for("on you")
     data["pipe"] = m.data()
 
     # diff tab

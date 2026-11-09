@@ -334,7 +334,7 @@ pre.ansi .Bt { color: var(--t-black); }
 
 <div class="strip"><div class="wrap">
   <span class="led" aria-hidden="true"></span>
-  <span><b>MIT</b> · <span data-l="fr">un seul binaire Go</span><span data-l="en">one Go binary</span> · <span data-l="fr">sur glab</span><span data-l="en">on top of glab</span> · <span data-l="fr">100 % clavier</span><span data-l="en">keyboard only</span></span>
+  <span><b>MIT</b> · <span data-l="fr">un seul binaire Go</span><span data-l="en">one Go binary</span> · <span data-l="fr">sur glab</span><span data-l="en">on top of glab</span> · <span data-l="fr">clavier d'abord, souris aussi</span><span data-l="en">keyboard first, mouse too</span></span>
 </div></div>
 
 <nav class="top" aria-label="Navigation">
@@ -364,8 +364,8 @@ pre.ansi .Bt { color: var(--t-black); }
         <span data-l="en"><span class="l">Whose turn is it?</span><span class="l">Yours, or theirs.</span><span class="l acc">Ping when it's time.</span></span>
       </h1>
       <p class="lead">
-        <span data-l="fr">flw est une interface terminal pour GitLab, façon k9s ou lazygit, construite sur <code>glab</code>. Pour chaque MR, elle dit qui doit agir, quoi, et depuis combien de jours ouvrés, puis quand il est temps de relancer. Et une deuxième fois.</span>
-        <span data-l="en">flw is a terminal UI for GitLab, k9s or lazygit style, built on <code>glab</code>. For every MR it tells you who must act, what, and for how many business days, then when it is time to ping them. And to ping them again.</span>
+        <span data-l="fr">flw est un bureau GitLab dans le terminal, façon tuios, construit sur <code>glab</code> : vos MR, l'aperçu de celle sous le curseur et son pipeline, côte à côte. Pour chaque MR, il dit qui doit agir, quoi, et depuis combien de jours ouvrés, puis quand il est temps de relancer. Et une deuxième fois.</span>
+        <span data-l="en">flw is a GitLab desktop in your terminal, tuios style, built on <code>glab</code>: your MRs, the one under the cursor and its pipeline, side by side. For every MR it tells you who must act, what, and for how many business days, then when it is time to ping them. And to ping them again.</span>
       </p>
       <div class="btns">
         <a class="btn primary" href="#u7"><span data-l="fr">Démarrer</span><span data-l="en">Get started</span> →</a>
@@ -377,7 +377,7 @@ pre.ansi .Bt { color: var(--t-black); }
       <div class="term-top"><i></i><i></i><i></i><span>$ flw</span>
         <div class="ctl"><button class="tbtn" type="button" data-player="hero" data-act="restart" aria-label="Restart">⏮</button></div>
       </div>
-      <div class="screen"><pre class="ansi" data-fit="136" data-max="15" id="heroScreen" aria-hidden="true"></pre></div>
+      <div class="screen"><pre class="ansi" data-fit="160" data-max="15" id="heroScreen" aria-hidden="true"></pre></div>
     </div>
   </div>
 </section>
@@ -475,7 +475,7 @@ pre.ansi .Bt { color: var(--t-black); }
     <div class="unit-head">
       <div class="eyebrow"><span class="num">04</span><span data-l="fr">cinq écrans</span><span data-l="en">five screens</span></div>
       <h2><span data-l="fr">Du tableau de bord<span class="dim">jusqu'à la ligne de log.</span></span><span data-l="en">From the dashboard<span class="dim">down to the log line.</span></span></h2>
-      <p class="lead muted"><span data-l="fr">Tout ce qui suit est le vrai flw, enregistré écran par écran sur une entreprise fictive (acme) servie par un faux <code>glab</code>.</span><span data-l="en">Everything below is the real flw, recorded screen by screen against a fictional company (acme) served by a fake <code>glab</code>.</span></p>
+      <p class="lead muted"><span data-l="fr">Tout ce qui suit est le vrai flw, enregistré écran par écran sur une entreprise fictive (acme) servie par un faux <code>glab</code>. Un dock de workspaces en haut, des fenêtres en tuiles, une barre d'attention à droite.</span><span data-l="en">Everything below is the real flw, recorded screen by screen against a fictional company (acme) served by a fake <code>glab</code>. A dock of workspaces on top, tiled windows, an attention sidebar on the right.</span></p>
     </div>
     <div class="tabs" role="tablist">
       <button role="tab" type="button" aria-selected="true" aria-controls="p-dash" id="t-dash"><span data-l="fr">Tableau de bord</span><span data-l="en">Dashboard</span> <span class="ext">t</span></button>
@@ -488,21 +488,25 @@ pre.ansi .Bt { color: var(--t-black); }
     <div class="tabpanel" role="tabpanel" id="p-dash" aria-labelledby="t-dash">
       <div class="panel-grid">
         <div class="term"><div class="term-top"><i></i><i></i><i></i><span>$ flw</span><div class="ctl"><button class="tbtn" type="button" data-player="dash" data-act="restart" aria-label="Restart">⏮</button><button class="tbtn main" type="button" data-player="dash" data-act="toggle" aria-label="Play / pause">Ⅱ</button></div></div>
-          <div class="screen"><pre class="ansi" data-fit="136" id="dashScreen"></pre></div></div>
+          <div class="screen"><pre class="ansi" data-fit="160" id="dashScreen"></pre></div></div>
         <div class="side">
-          <p><span data-l="fr">Vos MR (auteur, reviewer, assigné), triées par urgence : ce qui est à vous, puis ce qu'il faut relancer, puis le reste. <b>t</b> passe d'un filtre à l'autre : à moi, à relancer, en attente, à nettoyer, reportées.</span><span data-l="en">Your MRs (author, reviewer, assignee), sorted by urgency: yours first, then what needs a ping, then the rest. <b>t</b> cycles the focus: on me, to ping, waiting, to clean up, snoozed.</span></p>
+          <p><span data-l="fr">Vos MR (auteur, reviewer, assigné) dans la fenêtre principale, triées par urgence. L'aperçu et le pipeline de la MR sous le curseur suivent à droite. <b>t</b> (ou un clic dans la barre d'attention) filtre : à moi, à relancer, en attente, à nettoyer, reportées.</span><span data-l="en">Your MRs (author, reviewer, assignee) in the master window, sorted by urgency. The preview and pipeline of the MR under the cursor follow on the right. <b>t</b> (or a click in the attention bar) filters: on me, to ping, waiting, to clean up, snoozed.</span></p>
           <div class="cmdline"><code><span class="p">$ </span>flw</code><button class="copybtn" type="button" data-copy="flw">copy</button></div>
-          <p class="muted"><span data-l="fr">Dans un dépôt GitLab, flw ouvre les MR de ce projet ; <code>:my</code> revient au tableau de bord.</span><span data-l="en">Inside a GitLab repo flw opens that project's MRs; <code>:my</code> goes back to the dashboard.</span></p>
+          <div class="keysgrid">
+            <span><kbd>1</kbd>–<kbd>9</kbd>workspace</span><span><kbd>tab</kbd>window</span>
+            <span><kbd>f</kbd>zoom</span><span><kbd>ctrl+p</kbd>palette</span>
+          </div>
+          <p class="muted"><span data-l="fr">Un workspace par projet de vos MR, avec ses badges ▶ et ⏳. Dans un dépôt GitLab, flw s'ouvre sur ce projet. Clic, double-clic et molette marchent aussi.</span><span data-l="en">One workspace per project of your MRs, with its ▶ and ⏳ badges. Inside a GitLab repo flw opens on that project. Click, double-click and the wheel work too.</span></p>
         </div>
       </div>
     </div>
 
     <div class="tabpanel" role="tabpanel" id="p-detail" aria-labelledby="t-detail" hidden>
       <div class="panel-grid">
-        <div class="term"><div class="term-top"><i></i><i></i><i></i><span>!412 Rate-limit /search per API key</span><div class="ctl"><button class="tbtn" type="button" data-player="detail" data-act="restart" aria-label="Restart">⏮</button><button class="tbtn main" type="button" data-player="detail" data-act="toggle" aria-label="Play / pause">Ⅱ</button></div></div>
-          <div class="screen"><pre class="ansi" data-fit="136" id="detailScreen"></pre></div></div>
+        <div class="term"><div class="term-top"><i></i><i></i><i></i><span>tab → f</span><div class="ctl"><button class="tbtn" type="button" data-player="detail" data-act="restart" aria-label="Restart">⏮</button><button class="tbtn main" type="button" data-player="detail" data-act="toggle" aria-label="Play / pause">Ⅱ</button></div></div>
+          <div class="screen"><pre class="ansi" data-fit="160" id="detailScreen"></pre></div></div>
         <div class="side">
-          <p><span data-l="fr">Le bandeau dit à qui c'est et depuis quand, puis les étapes suivantes. Ensuite : l'état de chaque reviewer (✔ ✎ ✘ ○), la description en Markdown, les fils avec fichier et ligne.</span><span data-l="en">The banner says whose turn it is and for how long, then the next steps. Below: each reviewer's state (✔ ✎ ✘ ○), the description as Markdown, the threads with file and line.</span></p>
+          <p><span data-l="fr"><b>tab</b> donne le focus à l'aperçu, <b>f</b> l'ouvre en grand. Le bandeau dit à qui c'est et depuis quand, puis les étapes suivantes. Ensuite : l'état de chaque reviewer (✔ ✎ ✘ ○), la description en Markdown, les fils avec fichier et ligne.</span><span data-l="en"><b>tab</b> focuses the preview, <b>f</b> opens it full size. The banner says whose turn it is and for how long, then the next steps. Below: each reviewer's state (✔ ✎ ✘ ○), the description as Markdown, the threads with file and line.</span></p>
           <div class="keysgrid">
             <span><kbd>a</kbd>approve</span><span><kbd>m</kbd>merge</span>
             <span><kbd>M</kbd>auto-merge</span><span><kbd>r</kbd>rebase</span>
@@ -516,9 +520,9 @@ pre.ansi .Bt { color: var(--t-black); }
     <div class="tabpanel" role="tabpanel" id="p-act" aria-labelledby="t-act" hidden>
       <div class="panel-grid">
         <div class="term"><div class="term-top"><i></i><i></i><i></i><span>n · v · z</span><div class="ctl"><button class="tbtn" type="button" data-player="act" data-act="restart" aria-label="Restart">⏮</button><button class="tbtn main" type="button" data-player="act" data-act="toggle" aria-label="Play / pause">Ⅱ</button></div></div>
-          <div class="screen"><pre class="ansi" data-fit="136" id="actScreen"></pre></div></div>
+          <div class="screen"><pre class="ansi" data-fit="160" id="actScreen"></pre></div></div>
         <div class="side">
-          <p><b>n</b> — <span data-l="fr">relance : un commentaire pré-rempli avec les <code>@</code> des personnes attendues, « gentle reminder » la deuxième fois. Vous relisez, <b>ctrl+s</b> l'envoie.</span><span data-l="en">ping: a comment prefilled with the <code>@</code> of the people you wait on, "gentle reminder" the second time. You read it, <b>ctrl+s</b> sends it.</span></p>
+          <p><b>n</b> — <span data-l="fr">relance, dans une fenêtre flottante : un commentaire pré-rempli avec les <code>@</code> des personnes attendues, « gentle reminder » la deuxième fois. Vous relisez, <b>ctrl+s</b> l'envoie.</span><span data-l="en">ping, in a floating window: a comment prefilled with the <code>@</code> of the people you wait on, "gentle reminder" the second time. You read it, <b>ctrl+s</b> sends it.</span></p>
           <p><b>v</b> — <span data-l="fr">reviewers : la liste actuelle, ou vos reviewers par défaut. <b>V</b> les ajoute d'un coup.</span><span data-l="en">reviewers: the current list, or your default reviewers. <b>V</b> adds them in one go.</span></p>
           <p><b>z</b> — <span data-l="fr">reporter : <code>demain</code>, <code>lundi</code>, <code>2h</code>, <code>14:00</code>… La MR sort des compteurs et revient avec un rappel.</span><span data-l="en">snooze: <code>tomorrow</code>, <code>monday</code>, <code>2h</code>, <code>14:00</code>… The MR leaves the counts and comes back with a reminder.</span></p>
         </div>
@@ -527,10 +531,10 @@ pre.ansi .Bt { color: var(--t-black); }
 
     <div class="tabpanel" role="tabpanel" id="p-pipe" aria-labelledby="t-pipe" hidden>
       <div class="panel-grid">
-        <div class="term"><div class="term-top"><i></i><i></i><i></i><span>p → enter → l</span><div class="ctl"><button class="tbtn" type="button" data-player="pipe" data-act="restart" aria-label="Restart">⏮</button><button class="tbtn main" type="button" data-player="pipe" data-act="toggle" aria-label="Play / pause">Ⅱ</button></div></div>
-          <div class="screen"><pre class="ansi" data-fit="136" id="pipeScreen"></pre></div></div>
+        <div class="term"><div class="term-top"><i></i><i></i><i></i><span>tab tab → f → l</span><div class="ctl"><button class="tbtn" type="button" data-player="pipe" data-act="restart" aria-label="Restart">⏮</button><button class="tbtn main" type="button" data-player="pipe" data-act="toggle" aria-label="Play / pause">Ⅱ</button></div></div>
+          <div class="screen"><pre class="ansi" data-fit="160" id="pipeScreen"></pre></div></div>
         <div class="side">
-          <p><span data-l="fr">Pipelines de la MR, jobs par étape, puis le log nettoyé (sections, horodatages et codes de contrôle retirés). Le log suit le job tant qu'il tourne.</span><span data-l="en">The MR's pipelines, jobs by stage, then the log, cleaned up (sections, timestamps and control codes removed). The log follows the job while it runs.</span></p>
+          <p><span data-l="fr">La fenêtre des jobs du dernier pipeline, en grand avec <b>f</b>, puis le log nettoyé (sections, horodatages et codes de contrôle retirés). Le log suit le job tant qu'il tourne ; <b>p</b> liste tous les pipelines de la MR.</span><span data-l="en">The jobs window of the latest pipeline, full size with <b>f</b>, then the log, cleaned up (sections, timestamps and control codes removed). The log follows the job while it runs; <b>p</b> lists every pipeline of the MR.</span></p>
           <div class="keysgrid">
             <span><kbd>R</kbd>retry</span><span><kbd>C</kbd>cancel</span>
             <span><kbd>P</kbd>play</span><span><kbd>f</kbd>follow</span>
@@ -543,7 +547,7 @@ pre.ansi .Bt { color: var(--t-black); }
     <div class="tabpanel" role="tabpanel" id="p-diff" aria-labelledby="t-diff" hidden>
       <div class="panel-grid">
         <div class="term"><div class="term-top"><i></i><i></i><i></i><span>d · ] [</span><div class="ctl"><button class="tbtn" type="button" data-player="diff" data-act="restart" aria-label="Restart">⏮</button><button class="tbtn main" type="button" data-player="diff" data-act="toggle" aria-label="Play / pause">Ⅱ</button></div></div>
-          <div class="screen"><pre class="ansi" data-fit="136" id="diffScreen"></pre></div></div>
+          <div class="screen"><pre class="ansi" data-fit="160" id="diffScreen"></pre></div></div>
         <div class="side">
           <p><span data-l="fr">Le diff de la MR, fichier par fichier, avec les numéros de ligne. <b>]</b> et <b>[</b> sautent au fichier suivant ou précédent.</span><span data-l="en">The MR's diff, file by file, with line numbers. <b>]</b> and <b>[</b> jump to the next or previous file.</span></p>
         </div>
@@ -617,6 +621,7 @@ pre.ansi .Bt { color: var(--t-black); }
           <li><span data-l="fr">Les notifications ne partent que si flw est ouvert dans un terminal ; le service de cache, lui, n'a pas de terminal.</span><span data-l="en">Notifications only go out while flw is open in a terminal; the cache service has no terminal to send them through.</span></li>
           <li><span data-l="fr">Les onglets par MR, Activity et le nettoyage demandent Rex, sur la même machine.</span><span data-l="en">Per-MR tabs, Activity and clean-up need Rex, on the same machine.</span></li>
           <li><span data-l="fr">L'interface est en anglais.</span><span data-l="en">The interface is in English.</span></li>
+          <li><span data-l="fr">La souris capture la sélection : maintenez Shift (Option sur Mac) pour copier du texte, ou lancez <code>flw -ui classic</code>, une vue à la fois, sans souris.</span><span data-l="en">The mouse takes over selection: hold Shift (Option on macOS) to copy text, or run <code>flw -ui classic</code>, one view at a time, no mouse.</span></li>
         </ul>
         <div class="callout"><span data-l="fr">Le cache montre une copie de quelques secondes à quelques minutes, marquée <code>⟳ cached</code>, le temps que la version en direct arrive. <code>FLW_NO_CACHE=1</code> le coupe.</span><span data-l="en">The cache shows a copy a few seconds to minutes old, marked <code>⟳ cached</code>, until the live version arrives. <code>FLW_NO_CACHE=1</code> turns it off.</span></div>
       </div>
@@ -640,10 +645,11 @@ pre.ansi .Bt { color: var(--t-black); }
         <div class="card"><h3><span data-l="fr">Ce qu'il faut</span><span data-l="en">What you need</span></h3><p class="muted"><span data-l="fr">Go ≥ 1.27 pour construire, <code>glab</code> connecté à votre GitLab (gitlab.com ou auto-hébergé). <code>-host</code> choisit une autre instance.</span><span data-l="en">Go ≥ 1.27 to build, <code>glab</code> logged in to your GitLab (gitlab.com or self-hosted). <code>-host</code> picks another instance.</span></p></div>
         <div class="card"><h3><span data-l="fr">Les touches à retenir</span><span data-l="en">Keys to remember</span></h3>
           <div class="keysgrid" style="margin-top:8px">
-            <span><kbd>t</kbd>focus</span><span><kbd>enter</kbd>open</span>
-            <span><kbd>n</kbd>ping</span><span><kbd>v</kbd>reviewers</span>
-            <span><kbd>z</kbd>snooze</span><span><kbd>:</kbd>command</span>
-            <span><kbd>/</kbd>filter</span><span><kbd>?</kbd>help</span>
+            <span><kbd>1</kbd>–<kbd>9</kbd>workspace</span><span><kbd>tab</kbd>window</span>
+            <span><kbd>f</kbd>zoom</span><span><kbd>ctrl+p</kbd>palette</span>
+            <span><kbd>t</kbd>focus</span><span><kbd>n</kbd>ping</span>
+            <span><kbd>v</kbd>reviewers</span><span><kbd>z</kbd>snooze</span>
+            <span><kbd>space</kbd>keys</span><span><kbd>esc</kbd>back</span>
           </div>
         </div>
       </div>
