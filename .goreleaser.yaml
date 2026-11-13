@@ -1,0 +1,18 @@
+# Release: push a tag (git tag v0.2.0 && git push origin v0.2.0), the workflow does the rest.
+# flw updates itself from these archives (":update" in the app, or "flw update"):
+# the names flw_<os>_<arch>.tar.gz and checksums.txt are what it looks for.
+version: 2
+project_name: flw
+builds:
+  - env: [CGO_ENABLED=0]
+    goos: [linux, darwin]
+    goarch: [amd64, arm64]
+    ldflags: ["-s -w -X main.version=v{{ .Version }}"]
+archives:
+  - formats: [tar.gz]
+    name_template: "{{ .ProjectName }}_{{ .Os }}_{{ .Arch }}"
+    files: [LICENSE, README.md]
+checksum:
+  name_template: checksums.txt
+changelog:
+  use: github

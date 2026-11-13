@@ -510,7 +510,7 @@ func mrActions() []KeyAction {
 		{Keys: []string{"o"}, Help: "open in browser", Hint: "browser", Short: true, Fn: func(a *App, r *Row) tea.Cmd {
 			return openCmd(a, mrOf(r).WebURL)
 		}},
-		{Keys: []string{"y"}, Help: "copy URL", Fn: func(a *App, r *Row) tea.Cmd {
+		{Keys: []string{"y"}, Help: "copy URL", Hint: "copy link", Short: true, Fn: func(a *App, r *Row) tea.Cmd {
 			return copyCmd(a, mrOf(r).WebURL)
 		}},
 	}
@@ -805,6 +805,9 @@ func newDiffView(a *App, m *MR) *PagerView {
 		{Keys: []string{"o"}, Help: "open in browser", Hint: "browser", Short: true, Fn: func(a *App, r *Row) tea.Cmd {
 			return openCmd(a, mrOf(r).WebURL+"/diffs")
 		}},
+		{Keys: []string{"y"}, Help: "copy URL", Hint: "copy link", Short: true, Fn: func(a *App, r *Row) tea.Cmd {
+			return copyCmd(a, mrOf(r).WebURL+"/diffs")
+		}},
 	}
 	return p
 }
@@ -980,7 +983,7 @@ func newPipelinesView(a *App, project, ref string, mr *MR) *ListView {
 			return newPipelinePrompt(a, project, ref, mr)
 		}},
 		{Keys: []string{"o"}, Help: "open in browser", Hint: "browser", Short: true, Fn: func(a *App, r *Row) tea.Cmd { return openCmd(a, plOf(r).WebURL) }},
-		{Keys: []string{"y"}, Help: "copy URL", Fn: func(a *App, r *Row) tea.Cmd { return copyCmd(a, plOf(r).WebURL) }},
+		{Keys: []string{"y"}, Help: "copy URL", Hint: "copy link", Short: true, Fn: func(a *App, r *Row) tea.Cmd { return copyCmd(a, plOf(r).WebURL) }},
 	}
 	l.onEmptyKey = map[string]func(a *App) tea.Cmd{"n": func(a *App) tea.Cmd { return newPipelinePrompt(a, project, ref, mr) }}
 	return l
@@ -1105,7 +1108,7 @@ func newJobsView(a *App, project, pipelineIID string) *ListView {
 			})
 		}},
 		{Keys: []string{"o"}, Help: "open in browser", Hint: "browser", Short: true, Fn: func(a *App, r *Row) tea.Cmd { return openCmd(a, jobOf(r).WebURL) }},
-		{Keys: []string{"y"}, Help: "copy URL", Fn: func(a *App, r *Row) tea.Cmd { return copyCmd(a, jobOf(r).WebURL) }},
+		{Keys: []string{"y"}, Help: "copy URL", Hint: "copy link", Short: true, Fn: func(a *App, r *Row) tea.Cmd { return copyCmd(a, jobOf(r).WebURL) }},
 	}
 	return l
 }
@@ -1198,7 +1201,7 @@ func newLogView(a *App, j Job) *PagerView {
 			})
 		}},
 		{Keys: []string{"o"}, Help: "open in browser", Hint: "browser", Short: true, Fn: func(a *App, r *Row) tea.Cmd { return openCmd(a, j.WebURL) }},
-		{Keys: []string{"y"}, Help: "copy URL", Fn: func(a *App, r *Row) tea.Cmd { return copyCmd(a, j.WebURL) }},
+		{Keys: []string{"y"}, Help: "copy URL", Hint: "copy link", Short: true, Fn: func(a *App, r *Row) tea.Cmd { return copyCmd(a, j.WebURL) }},
 	}
 	return p
 }
@@ -1256,7 +1259,7 @@ func newProjectsView(a *App) *ListView {
 		{Keys: []string{"p"}, Help: "pipelines", Short: true, Fn: func(a *App, r *Row) tea.Cmd { return a.push(newPipelinesView(a, sel(a, r), "", nil)) }},
 		{Keys: []string{"i"}, Help: "issues", Short: true, Fn: func(a *App, r *Row) tea.Cmd { return a.push(newIssuesView(a, sel(a, r))) }},
 		{Keys: []string{"o"}, Help: "open in browser", Hint: "browser", Short: true, Fn: func(a *App, r *Row) tea.Cmd { p, _ := r.Data.(Project); return openCmd(a, p.WebURL) }},
-		{Keys: []string{"y"}, Help: "copy URL", Fn: func(a *App, r *Row) tea.Cmd { p, _ := r.Data.(Project); return copyCmd(a, p.WebURL) }},
+		{Keys: []string{"y"}, Help: "copy URL", Hint: "copy link", Short: true, Fn: func(a *App, r *Row) tea.Cmd { p, _ := r.Data.(Project); return copyCmd(a, p.WebURL) }},
 	}
 	return l
 }
@@ -1338,7 +1341,7 @@ func newIssuesView(a *App, project string) *ListView {
 			})
 		}},
 		{Keys: []string{"o"}, Help: "open in browser", Hint: "browser", Short: true, Fn: func(a *App, r *Row) tea.Cmd { return openCmd(a, issueOf(r).WebURL) }},
-		{Keys: []string{"y"}, Help: "copy URL", Fn: func(a *App, r *Row) tea.Cmd { return copyCmd(a, issueOf(r).WebURL) }},
+		{Keys: []string{"y"}, Help: "copy URL", Hint: "copy link", Short: true, Fn: func(a *App, r *Row) tea.Cmd { return copyCmd(a, issueOf(r).WebURL) }},
 	}
 	l.onEmptyKey = map[string]func(a *App) tea.Cmd{"s": cycle}
 	return l

@@ -3,10 +3,12 @@
 A keyboard-driven GitLab TUI (k9s / lazygit style) on top of [`glab`](https://gitlab.com/gitlab-org/cli).
 All data goes through `glab api`, so it reuses your glab login and host.
 
-Needs Go 1.27+ and a logged-in `glab` (`glab auth login`).
+Needs a logged-in `glab` (`glab auth login`). Get a binary from the
+[releases](https://github.com/jgsqware/flw/releases) (linux/macOS, amd64/arm64), or build it with Go 1.27+:
 
 ```sh
 go install github.com/jgsqware/flw@latest
+flw update                 # install the latest release over the current binary
 flw                        # inside a GitLab repo: its merge requests; elsewhere: your MR dashboard
 flw -R group/project       # a given project
 flw -host gitlab.example.com
@@ -168,13 +170,26 @@ since the last round, and (every 10th round) the project list. Run it in the for
 `m` merge · `M` auto-merge when pipeline succeeds · `r` rebase · `c` comment (`ctrl+s` sends) · `D` toggle draft ·
 `x` close/reopen · `n` ping · `t` focus · `C` checkout locally · `o` browser · `y` copy URL · `S` system notes (details).
 
-**Diff**: `]`/`[` next/previous file · `w` wrap.
+**Diff**: `]`/`[` next/previous file · `w` wrap · `o` browser · `y` copy URL.
 
 **Pipelines**: `enter` jobs · `r` retry · `x` cancel · `n` run new pipeline · `o` · `y`.
 
 **Jobs**: `enter`/`l` log · `r` retry · `p` play manual job · `x` cancel · `R` retry the pipeline · `o` · `y`.
 
-**Log**: auto-follows running jobs · `f` follow · `w` wrap · `h/l` scroll sideways · `/` search.
+**Log**: auto-follows running jobs · `f` follow · `w` wrap · `h/l` scroll sideways · `/` search · `o` · `y`.
+
+`y` copies the browser link of what is selected (MR, diff, pipeline, job, project, issue) to the clipboard
+(pbcopy, wl-copy or xclip, else OSC 52 so it also works over SSH).
+
+## Updates
+
+While open, flw checks GitHub for a newer release (at start, then every 6 h) and shows `⬆ v0.3.0` in the
+dock. `:update` (also in `ctrl+p`) downloads the archive for your OS/arch, checks it against
+`checksums.txt`, replaces the binary and restarts flw in place. Outside the app: `flw update`.
+Turn the check off with `update: {check: false}` in the config or `FLW_NO_UPDATE_CHECK=1`.
+Builds without a release version (`go install` from a commit, local builds) are not nagged, but `:update` still works.
+
+Releasing: `git tag v0.2.0 && git push origin v0.2.0`; the GitHub workflow runs the tests and goreleaser.
 
 Destructive actions (merge, close, cancel, play) ask for confirmation. Lists refresh on their own
 (faster while pipelines run).

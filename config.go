@@ -24,6 +24,9 @@ type Config struct {
 	SnoozeAt  string       `yaml:"snooze_at"`
 	UI        string       `yaml:"ui"` // desktop (default) or classic // when "z demain" wakes up, default 09:00 // folders holding your clones
 	Notify    NotifyConfig `yaml:"notify"`
+	Update    struct {
+		Check *bool `yaml:"check"` // look for a new GitHub release while open, default true
+	} `yaml:"update"`
 }
 
 // NotifyConfig: what flw tells you while it is open.
@@ -72,6 +75,10 @@ reviewers:
 
 # folders holding your git clones (used by "w"); default: ~/src, ~/code, ~/git, … and ~
 # code_roots: [~/src]
+
+# look for a new flw release while open (shows "⬆ vX"; :update installs it)
+# update:
+#   check: true
 `
 
 func configPath() string {

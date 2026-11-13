@@ -328,7 +328,7 @@ func (a *App) paletteItems() []palItem {
 	}
 	for _, c := range []struct{ cmd, help string }{
 		{"my", "my open merge requests"}, {"projects", "my projects"}, {"pl", "pipelines of the current project"},
-		{"issues", "issues of the current project"}, {"mr", "merge requests of the current project"}, {"quit", "quit flw"},
+		{"issues", "issues of the current project"}, {"mr", "merge requests of the current project"}, {"update", "update flw to the latest release"}, {"quit", "quit flw"},
 	} {
 		c := c
 		items = append(items, palItem{":" + c.cmd + "  " + c.help, "command", func(a *App) tea.Cmd { return a.runCommand(c.cmd) }})
@@ -522,6 +522,9 @@ func (a *App) renderDock() string {
 	}
 	if a.gl.Me != "" {
 		right = append(right, sAccent.Render("@"+a.gl.Me))
+	}
+	if b := a.updateBadge(); b != "" {
+		right = append(right, b)
 	}
 	right = append(right, sGray.Render(time.Now().Format("15:04")))
 	r := strings.Join(right, "  ") + " "

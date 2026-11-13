@@ -82,6 +82,13 @@ type App struct {
 	spin spinner.Model
 	busy int
 
+	upd struct {
+		latest   string // newer release tag, "" when up to date
+		rel      ghRelease
+		updating bool
+		restart  string // binary to exec after quitting
+	}
+
 	desk      deskState
 	layout    layoutMap
 	lastClick struct {
@@ -128,7 +135,11 @@ func (a *App) Init() tea.Cmd {
 		}
 		return bootMsg{project: proj}
 	}
-	return tea.Batch(boot, a.spin.Tick, tick())
+	cmds := []tea.Cmd{boot, a.spin.Tick, tick()}
+	if updateCheckOn() {
+		cmds = append(cmds, checkUpdateCmd(3*time.Second))
+	}
+	return tea.Batch(cmds...)
 }
 
 func tick() tea.Cmd {
@@ -242,6 +253,12 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		a.desk.cur = a.project
 		return a, tea.Batch(first, a.poll(), a.scanRexCmd())
+
+	case updateCheckMsg:
+		return a, a.onUpdateCheck(msg)
+
+	case updateDoneMsg:
+		return a, a.onUpdateDone(msg)
 
 	case previewMsg:
 		return a, a.loadPreview(msg.key)
@@ -493,6 +510,7 @@ var commands = []struct {
 	{[]string{"issues", "is"}, "issues of the current project"},
 	{[]string{"projects", "proj"}, "my projects"},
 	{[]string{"project", "p"}, "switch project: :project group/name"},
+	{[]string{"update"}, "update flw to the latest release and restart"},
 	{[]string{"quit", "q"}, "quit"},
 }
 
@@ -538,6 +556,8 @@ func (a *App) runCommand(line string) tea.Cmd {
 		return a.reset(newIssuesView(a, a.project))
 	case "proj", "projects":
 		return a.reset(newProjectsView(a))
+	case "update", "upgrade":
+		return a.startUpdate()
 	case "p", "project":
 		if arg == "" {
 			return a.reset(newProjectsView(a))
@@ -600,6 +620,9 @@ func (a *App) renderHeader() string {
 	right := ""
 	if a.busy > 0 || (a.top() != nil && isLoading(a.top())) {
 		right = a.spin.View() + " "
+	}
+	if b := a.updateBadge(); b != "" {
+		right = b + " " + right
 	}
 	if lw := ansi.StringWidth(line1) + ansi.StringWidth(right); lw < a.w {
 		line1 += strings.Repeat(" ", a.w-lw) + right
